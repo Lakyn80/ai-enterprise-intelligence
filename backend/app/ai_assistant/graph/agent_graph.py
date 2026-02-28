@@ -115,9 +115,6 @@ async def run_agent(
                 "tool_call_id": tc.get("id", "unknown"),
                 "content": result,
             })
-        messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
-        messages.extend(tool_messages)
-
             if name == "query_knowledge":
                 try:
                     data = json.loads(result)
@@ -125,6 +122,8 @@ async def run_agent(
                         citations.append(c)
                 except Exception:
                     pass
+        messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+        messages.extend(tool_messages)
 
     return (
         "I've gathered the available data. Please refine your question if you need more specific information.",
