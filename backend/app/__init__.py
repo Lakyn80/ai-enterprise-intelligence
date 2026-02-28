@@ -1,0 +1,1 @@
+"""Retail Forecast API application."""
