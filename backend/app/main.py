@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.logging import get_logger, setup_logging
 from app.forecasting.router import router as forecasting_router
+from app.forecasting.pricing_router import router as pricing_router
 from app.ai_assistant.router import router as assistant_router
 from app.knowledge_rag.router import router as knowledge_router
 from app.settings import settings
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
         return _metrics
 
     app.include_router(forecasting_router)
+    app.include_router(pricing_router)
     app.include_router(assistant_router)
     if settings.rag_enabled:
         app.include_router(knowledge_router)

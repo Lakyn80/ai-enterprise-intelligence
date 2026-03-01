@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.core.deps import ApiKeyDep
+from app.core.security import verify_api_key
 from app.knowledge_rag.schemas import IngestRequest, QueryRequest, QueryResponse
 from app.knowledge_rag.service import KnowledgeService
 
@@ -13,7 +13,35 @@ def get_knowledge_service() -> KnowledgeService:
     return KnowledgeService()
 
 
-@router.post("/knowledge/ingest", dependencies=[Depends(ApiKeyDep)])
+@router.post("/knowledge/reset", dependencies=[Depends(verify_api_key)])
+async def reset_rag_store():
+    """Smazat RAG vektorový index (pro pře-ingest s novými embeddings)."""
+    import shutil
+    from pathlib import Path
+
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+
+    from app.settings import settings
+
+    removed = []
+    try:
+        client = chromadb.PersistentClient(
+            path=settings.rag_chroma_path,
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        client.delete_collection(settings.rag_collection_name)
+        removed.append("chroma_collection")
+    except Exception:
+        pass
+    faiss_path = Path("./faiss_index")
+    if faiss_path.exists():
+        shutil.rmtree(faiss_path)
+        removed.append("faiss_index")
+    return {"status": "ok", "message": "RAG store resetován", "removed": removed}
+
+
+@router.post("/knowledge/ingest", dependencies=[Depends(verify_api_key)])
 async def ingest_documents(body: IngestRequest):
     """Ingest documents from folder or raw text (API key required)."""
     service = get_knowledge_service()

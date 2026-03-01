@@ -1,4 +1,4 @@
-"""AI Assistant service - orchestration."""
+"""AI Assistant service - modulární (default DeepSeek)."""
 
 from typing import Any
 
@@ -10,10 +10,10 @@ from app.settings import settings
 
 
 def get_provider(provider_name: str) -> LLMProvider:
-    """Get LLM provider by name."""
-    if provider_name == "deepseek":
-        return DeepSeekProvider()
-    return OpenAIProvider()
+    """Přepínač LLM provideru (default: deepseek)."""
+    if provider_name == "openai":
+        return OpenAIProvider()
+    return DeepSeekProvider()
 
 
 async def chat(

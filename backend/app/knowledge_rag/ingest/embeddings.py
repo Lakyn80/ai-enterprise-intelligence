@@ -1,7 +1,6 @@
-"""Embedding provider interface and implementations."""
+"""Embedding provider - modulární (default: DeepSeek)."""
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from app.settings import settings
 
@@ -20,8 +19,42 @@ class EmbeddingProvider(ABC):
         ...
 
 
+class DeepSeekEmbeddingProvider(EmbeddingProvider):
+    """DeepSeek embeddings (default). Fallback na stub pokud API není dostupné."""
+
+    def __init__(self):
+        from openai import AsyncOpenAI
+        self._client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url.rstrip("/") + "/v1",
+        )
+        self._fallback = StubEmbeddingProvider()
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        try:
+            resp = await self._client.embeddings.create(
+                model="deepseek-embedding",
+                input=texts,
+            )
+            return [d.embedding for d in resp.data]
+        except Exception:
+            return await self._fallback.embed_documents(texts)
+
+    async def embed_query(self, query: str) -> list[float]:
+        try:
+            resp = await self._client.embeddings.create(
+                model="deepseek-embedding",
+                input=[query],
+            )
+            return resp.data[0].embedding
+        except Exception:
+            return await self._fallback.embed_query(query)
+
+
 class OpenAIEmbeddingProvider(EmbeddingProvider):
-    """OpenAI embeddings API."""
+    """OpenAI embeddings (volitelné)."""
 
     def __init__(self):
         from openai import AsyncOpenAI
@@ -45,13 +78,12 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
 
 class StubEmbeddingProvider(EmbeddingProvider):
-    """Stub for dev when no API key - returns deterministic pseudo-embeddings."""
+    """Lokální stub (default)."""
 
     def _stub_embed(self, text: str) -> list[float]:
-        """Simple hash-based pseudo-embedding (1536 dim for OpenAI compat)."""
         import hashlib
         h = hashlib.sha256(text.encode()).digest()
-        return [(b / 255 - 0.5) * 0.01 for b in h[:24]] * 64  # 1536 dims
+        return [(b / 255 - 0.5) * 0.01 for b in h[:32]] * 32  # 1024 dims (DeepSeek compat)
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [self._stub_embed(t) for t in texts]
@@ -61,7 +93,9 @@ class StubEmbeddingProvider(EmbeddingProvider):
 
 
 def get_embedding_provider() -> EmbeddingProvider:
-    """Get embedding provider based on settings."""
+    """Embeddings pro RAG (modulární: deepseek default, openai, stub)."""
     if settings.embeddings_provider == "openai" and settings.openai_api_key:
         return OpenAIEmbeddingProvider()
+    if settings.deepseek_api_key:
+        return DeepSeekEmbeddingProvider()
     return StubEmbeddingProvider()

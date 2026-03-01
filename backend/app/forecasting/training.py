@@ -27,6 +27,8 @@ FEATURE_COLS = [
     "rolling_mean_30",
     "price",
     "price_change_pct",
+    "log_price",
+    "price_vs_avg_30",
     "promo_flag",
 ]
 TARGET_COL = "quantity"
@@ -48,13 +50,14 @@ def train_model(
     os.makedirs(artifacts_dir, exist_ok=True)
 
     df = engineer_features(df)
+    df["target"] = np.log1p(df[TARGET_COL])
     # Ensure all feature cols exist
     for col in FEATURE_COLS:
         if col not in df.columns:
             df[col] = 0
 
     X = df[FEATURE_COLS]
-    y = df[TARGET_COL]
+    y = df["target"]
 
     # Deterministic training
     params = {
@@ -64,17 +67,18 @@ def train_model(
         "seed": 42,
         "deterministic": True,
         "force_col_wise": True,
-        "num_leaves": 31,
+        "num_leaves": 63,
         "learning_rate": 0.05,
-        "n_estimators": 100,
+        "n_estimators": 300,
     }
 
     model = lgb.LGBMRegressor(**params)
     model.fit(X, y)
 
     preds = model.predict(X)
-    mae = float(np.mean(np.abs(preds - y)))
-    mape = float(np.mean(np.abs((preds - y) / (y + 1e-8)))) * 100
+    quantity_pred = np.expm1(preds)
+    mae = float(np.mean(np.abs(quantity_pred - df[TARGET_COL])))
+    mape = float(np.mean(np.abs((quantity_pred - df[TARGET_COL]) / (df[TARGET_COL] + 1e-8)))) * 100
 
     version = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
     filename = f"lgb_{version}.txt"
@@ -107,10 +111,11 @@ def predict(
     model: lgb.Booster,
     df: pd.DataFrame,
 ) -> np.ndarray:
-    """Run prediction on feature-prepared DataFrame."""
+    """Run prediction on feature-prepared DataFrame. Returns quantity (expm1 of log-space output)."""
     for col in FEATURE_COLS:
         if col not in df.columns:
             df = df.copy()
             df[col] = 0
     X = df[FEATURE_COLS]
-    return model.predict(X)
+    pred = model.predict(X)
+    return np.expm1(pred)

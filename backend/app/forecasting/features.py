@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from app.shared.utils import safe_float
@@ -63,6 +64,13 @@ def build_price_features(
     out = out.sort_values([entity_col, date_col])
     out["price_change_pct"] = out.groupby(entity_col)[price_col].pct_change()
     out["price_change_pct"] = out["price_change_pct"].fillna(0)
+    out["log_price"] = np.log(out[price_col].clip(lower=1e-8))
+    out["rolling_mean_price_30"] = (
+        out.groupby(entity_col)[price_col]
+        .transform(lambda x: x.shift(1).rolling(window=30, min_periods=7).mean())
+    )
+    out["price_vs_avg_30"] = out[price_col] / out["rolling_mean_price_30"]
+    out["price_vs_avg_30"] = out["price_vs_avg_30"].replace([np.inf, -np.inf], np.nan).fillna(1)
     return out
 
 
@@ -87,8 +95,11 @@ def engineer_features(
     out = build_rolling_features(out, target_col, entity_col, date_col)
     out = build_price_features(out, price_col, entity_col, date_col)
 
-    # Drop rows with NaN in key features (from lags at start)
-    out = out.dropna(subset=[f"lag_30"])
+    # Drop rows with NaN in lag_30 (from lags at start), or fillna if all NaN (inference)
+    if out["lag_30"].notna().any():
+        out = out.dropna(subset=["lag_30"])
+    else:
+        out = out.fillna(0)
 
     return out
 

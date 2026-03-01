@@ -1,6 +1,6 @@
 """Forecasting repository - data access layer."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Sequence
 
 import pandas as pd
@@ -49,6 +49,72 @@ class ForecastingRepository:
             for r in rows
         ]
         return pd.DataFrame(data)
+
+    async def get_aggregated_daily(
+        self,
+        from_date: date,
+        to_date: date,
+        product_ids: list[str] | None = None,
+        group_by: str = "product",
+    ) -> list[dict]:
+        """Get daily aggregated data for visualization."""
+        from sqlalchemy import func
+        q = (
+            select(
+                SalesFact.date,
+                SalesFact.product_id,
+                func.sum(SalesFact.quantity).label("quantity"),
+                func.sum(SalesFact.revenue).label("revenue"),
+                func.avg(SalesFact.price).label("price"),
+            )
+            .where(SalesFact.date >= from_date, SalesFact.date <= to_date)
+        )
+        if product_ids:
+            q = q.where(SalesFact.product_id.in_(product_ids))
+        q = q.group_by(SalesFact.date, SalesFact.product_id)
+        q = q.order_by(SalesFact.date, SalesFact.product_id)
+        result = await self._session.execute(q)
+        rows = result.all()
+        return [
+            {
+                "date": str(r.date),
+                "product_id": r.product_id,
+                "quantity": float(r.quantity),
+                "revenue": float(r.revenue),
+                "price": float(r.price or 0),
+            }
+            for r in rows
+        ]
+
+    async def get_latest_sales_df(
+        self,
+        product_ids: list[str],
+        min_days: int = 90,
+    ) -> pd.DataFrame:
+        """Fetch most recent sales for product(s) - for forecast when requested range has no data."""
+        from sqlalchemy import func
+        subq = (
+            select(SalesFact.date)
+            .where(SalesFact.product_id.in_(product_ids))
+            .order_by(SalesFact.date.desc())
+            .limit(1)
+        )
+        result = await self._session.execute(subq)
+        max_date = result.scalar_one_or_none()
+        if not max_date:
+            return pd.DataFrame(
+                columns=["product_id", "date", "quantity", "revenue", "price", "promo_flag", "category_id"]
+            )
+        from_date = max_date - timedelta(days=min_days)
+        return await self.get_sales_df(from_date, max_date, product_ids)
+
+    async def get_product_list(self) -> list[str]:
+        """Get distinct product IDs."""
+        from sqlalchemy import distinct, select
+        result = await self._session.execute(
+            select(distinct(SalesFact.product_id)).order_by(SalesFact.product_id)
+        )
+        return [r[0] for r in result.all()]
 
     async def get_active_model_path(self) -> str | None:
         """Get file path of active model artifact."""

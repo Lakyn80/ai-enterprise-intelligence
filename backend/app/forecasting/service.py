@@ -5,11 +5,18 @@ import os
 
 import pandas as pd
 
-from app.forecasting.backtest import backtest_metrics, time_based_split
+from app.forecasting.backtest import backtest_metrics, rolling_backtest
 from app.forecasting.features import apply_price_delta, engineer_features
 from app.forecasting.repository import ForecastingRepository
 from app.forecasting.schemas import ForecastPoint, ScenarioPriceChangeResponse
-from app.forecasting.training import load_model, predict, train_model, FEATURE_COLS
+from app.forecasting.training import (
+    DATE_COL,
+    ENTITY_COL,
+    FEATURE_COLS,
+    load_model,
+    predict,
+    train_model,
+)
 from app.settings import settings
 
 
@@ -43,6 +50,8 @@ class ForecastingService:
             "artifact_id": art.id,
         }
 
+    _PRODUCT_ALIASES = {"P001": "P0001", "P002": "P0002", "P003": "P0003"}
+
     async def get_forecast(
         self,
         product_id: str,
@@ -50,10 +59,13 @@ class ForecastingService:
         to_date: date,
     ) -> tuple[list[ForecastPoint], str | None]:
         """Generate forecast for product and date range."""
-        # Need extended history for feature computation (lags, rolling)
+        product_id = self._PRODUCT_ALIASES.get(product_id, product_id)
         lookback = 60
         hist_start = from_date - timedelta(days=lookback)
         df = await self._repo.get_sales_df(hist_start, to_date, [product_id])
+        if df.empty:
+            # Requested range beyond data - use latest available and extend to forecast dates
+            df = await self._repo.get_latest_sales_df([product_id], min_days=lookback + 30)
         if df.empty:
             return [], None
 
@@ -64,9 +76,10 @@ class ForecastingService:
         model = load_model(file_path)
         version = await self._repo.get_active_model_version()
 
-        # Build full date range for forecast (fill missing days with last known values)
+        # Build full date range: from earliest in df to to_date (covers history + forecast range)
         df["date"] = pd.to_datetime(df["date"])
-        all_dates = pd.date_range(hist_start, to_date, freq="D")
+        range_start = min(df["date"]).date() if hasattr(min(df["date"]), "date") else min(df["date"])
+        all_dates = pd.date_range(range_start, to_date, freq="D")
         df_full = df.set_index("date").reindex(all_dates)
         df_full = df_full.ffill().bfill()
         df_full = df_full.reset_index()
@@ -78,11 +91,13 @@ class ForecastingService:
         for col in FEATURE_COLS:
             if col not in df_feat.columns:
                 df_feat[col] = 0
+        df_feat[FEATURE_COLS] = df_feat[FEATURE_COLS].fillna(0)
 
         preds = predict(model, df_feat)
         df_feat["predicted_quantity"] = preds
         df_feat["predicted_revenue"] = df_feat["predicted_quantity"] * df_feat["price"]
 
+        df_feat["date"] = pd.to_datetime(df_feat["date"]).dt.date
         mask = (df_feat["date"] >= from_date) & (df_feat["date"] <= to_date)
         subset = df_feat[mask]
         points = [
@@ -104,6 +119,7 @@ class ForecastingService:
         price_delta_pct: float,
     ) -> ScenarioPriceChangeResponse:
         """Recompute forecast with hypothetical price change."""
+        product_id = self._PRODUCT_ALIASES.get(product_id, product_id)
         base_points, _ = await self.get_forecast(product_id, from_date, to_date)
         if not base_points:
             return ScenarioPriceChangeResponse(
@@ -116,6 +132,8 @@ class ForecastingService:
         lookback = 60
         hist_start = from_date - timedelta(days=lookback)
         df = await self._repo.get_sales_df(hist_start, to_date, [product_id])
+        if df.empty:
+            df = await self._repo.get_latest_sales_df([product_id], min_days=lookback + 30)
         if df.empty:
             return ScenarioPriceChangeResponse(
                 product_id=product_id,
@@ -138,7 +156,8 @@ class ForecastingService:
 
         model = load_model(file_path)
         df_scenario["date"] = pd.to_datetime(df_scenario["date"])
-        all_dates = pd.date_range(hist_start, to_date, freq="D")
+        range_start = min(df_scenario["date"]).date() if hasattr(min(df_scenario["date"]), "date") else min(df_scenario["date"])
+        all_dates = pd.date_range(range_start, to_date, freq="D")
         df_full = df_scenario.set_index("date").reindex(all_dates)
         df_full = df_full.ffill().bfill()
         df_full = df_full.reset_index()
@@ -150,11 +169,13 @@ class ForecastingService:
         for col in FEATURE_COLS:
             if col not in df_feat.columns:
                 df_feat[col] = 0
+        df_feat[FEATURE_COLS] = df_feat[FEATURE_COLS].fillna(0)
 
         preds = predict(model, df_feat)
         df_feat["predicted_quantity"] = preds
         df_feat["predicted_revenue"] = df_feat["predicted_quantity"] * df_feat["price"]
 
+        df_feat["date"] = pd.to_datetime(df_feat["date"]).dt.date
         mask = (df_feat["date"] >= from_date) & (df_feat["date"] <= to_date)
         subset = df_feat[mask]
         scenario_points = [
@@ -184,3 +205,44 @@ class ForecastingService:
             delta_revenue_pct=delta_revenue_pct,
             delta_quantity_pct=delta_quantity_pct,
         )
+
+    async def run_backtest(
+        self,
+        product_id: str,
+        from_date: date,
+        to_date: date,
+        train_window_days: int = 90,
+        step_days: int = 7,
+    ) -> dict:
+        """Run rolling backtest: compare predictions with actuals, return MAE/MAPE."""
+        product_id = self._PRODUCT_ALIASES.get(product_id, product_id)
+        # Fetch extended history so we have enough for train window + predictions
+        hist_start = from_date - timedelta(days=train_window_days)
+        df = await self._repo.get_sales_df(hist_start, to_date, [product_id])
+        if df.empty or len(df) < train_window_days + step_days:
+            return {"mae": None, "mape": None, "message": "Insufficient data"}
+        file_path = await self._repo.get_active_model_path()
+        if not file_path or not os.path.exists(file_path):
+            return {"mae": None, "mape": None, "message": "No trained model"}
+        model = load_model(file_path)
+
+        def predict_fn(d: pd.DataFrame):
+            return predict(model, d)
+
+        actuals, preds, _ = rolling_backtest(
+            df,
+            date_col=DATE_COL,
+            entity_col=ENTITY_COL,
+            predict_fn=predict_fn,
+            train_window_days=train_window_days,
+            step_days=step_days,
+        )
+        metrics = backtest_metrics(actuals, preds)
+        return {
+            "mae": metrics["mae"],
+            "mape": metrics["mape"],
+            "product_id": product_id,
+            "from_date": str(from_date),
+            "to_date": str(to_date),
+            "n_predictions": len(preds),
+        }

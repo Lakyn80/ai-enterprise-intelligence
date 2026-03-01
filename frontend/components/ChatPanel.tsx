@@ -5,7 +5,7 @@ import { fetchChat } from "@/lib/api";
 
 export function ChatPanel() {
   const [message, setMessage] = useState("");
-  const [provider, setProvider] = useState<"openai" | "deepseek">("openai");
+  const [provider, setProvider] = useState<"openai" | "deepseek">("deepseek");
   const [answer, setAnswer] = useState("");
   const [usedTools, setUsedTools] = useState<string[]>([]);
   const [citations, setCitations] = useState<Record<string, unknown>[]>([]);
@@ -39,8 +39,8 @@ export function ChatPanel() {
           onChange={(e) => setProvider(e.target.value as "openai" | "deepseek")}
           className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-white"
         >
+          <option value="deepseek">DeepSeek (default)</option>
           <option value="openai">OpenAI</option>
-          <option value="deepseek">DeepSeek</option>
         </select>
         <input
           value={message}

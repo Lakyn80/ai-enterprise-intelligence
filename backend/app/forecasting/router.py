@@ -5,7 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.deps import ApiKeyDep
+from app.core.security import verify_api_key
 from app.core.deps import AsyncSessionDep
 from app.forecasting.repository import ForecastingRepository
 from app.forecasting.schemas import (
@@ -22,7 +22,7 @@ def get_forecasting_service(session: AsyncSessionDep) -> ForecastingService:
     return ForecastingService(ForecastingRepository(session))
 
 
-@router.post("/admin/seed", dependencies=[Depends(ApiKeyDep)])
+@router.post("/admin/seed", dependencies=[Depends(verify_api_key)])
 async def seed_demo_data():
     """Load demo data (API key required)."""
     from datetime import timedelta
@@ -71,7 +71,38 @@ async def seed_demo_data():
     return {"status": "ok", "message": "Seeded 360 sales facts", "rows": 360}
 
 
-@router.post("/admin/train", dependencies=[Depends(ApiKeyDep)])
+@router.post("/admin/import-kaggle", dependencies=[Depends(verify_api_key)])
+async def import_kaggle_data():
+    """Import Kaggle retail CSV from /data into sales_facts (API key required)."""
+    from app.forecasting.import_kaggle import import_csv
+    try:
+        n = await import_csv()
+        return {"status": "ok", "message": f"Imported {n} rows", "rows": n}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/data/products")
+async def list_products(session: AsyncSessionDep) -> list[str]:
+    """List available product IDs for visualization."""
+    repo = ForecastingRepository(session)
+    return await repo.get_product_list()
+
+
+@router.get("/data/historical")
+async def get_historical_data(
+    session: AsyncSessionDep,
+    from_date: date,
+    to_date: date,
+    product_id: str | None = None,
+):
+    """Get aggregated historical data for visualization."""
+    repo = ForecastingRepository(session)
+    product_ids = [product_id] if product_id else None
+    return await repo.get_aggregated_daily(from_date, to_date, product_ids)
+
+
+@router.post("/admin/train", dependencies=[Depends(verify_api_key)])
 async def train_model_endpoint(
     from_date: date,
     to_date: date,
@@ -94,14 +125,57 @@ async def get_forecast(
     session: AsyncSessionDep,
 ) -> ForecastResponse:
     """Get forecast for product and date range."""
-    service = get_forecasting_service(session)
-    points, version = await service.get_forecast(product_id, from_date, to_date)
+    try:
+        service = get_forecasting_service(session)
+        points, version = await service.get_forecast(product_id, from_date, to_date)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     return ForecastResponse(
         product_id=product_id,
         from_date=from_date,
         to_date=to_date,
         points=points,
         model_version=version,
+    )
+
+
+@router.get("/backtest")
+async def run_backtest_public(
+    session: AsyncSessionDep,
+    product_id: str,
+    from_date: date,
+    to_date: date,
+    train_window_days: int = 90,
+    step_days: int = 7,
+):
+    """Run backtest: compare predictions with actuals, return MAE/MAPE."""
+    service = get_forecasting_service(session)
+    return await service.run_backtest(
+        product_id=product_id,
+        from_date=from_date,
+        to_date=to_date,
+        train_window_days=train_window_days,
+        step_days=step_days,
+    )
+
+
+@router.post("/admin/backtest", dependencies=[Depends(verify_api_key)])
+async def run_backtest_endpoint(
+    session: AsyncSessionDep,
+    product_id: str,
+    from_date: date,
+    to_date: date,
+    train_window_days: int = 90,
+    step_days: int = 7,
+):
+    """Run backtest (API key required)."""
+    service = get_forecasting_service(session)
+    return await service.run_backtest(
+        product_id=product_id,
+        from_date=from_date,
+        to_date=to_date,
+        train_window_days=train_window_days,
+        step_days=step_days,
     )
 
 

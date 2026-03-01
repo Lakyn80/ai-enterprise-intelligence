@@ -72,6 +72,9 @@ htmlcov/
 .tox/
 .nox/
 
+# Data
+data/
+
 # Misc
 *.bak
 *.tmp

@@ -22,11 +22,11 @@ class FAISSVectorStore(VectorStore):
         self._ids: list[str] = []
         self._path = Path("./faiss_index")
 
-    def _ensure_index(self) -> None:
+    def _ensure_index(self, dim: int = 1024) -> None:
         if self._index is None:
             try:
                 import faiss
-                self._index = faiss.IndexFlatL2(1536)  # OpenAI embedding dim
+                self._index = faiss.IndexFlatL2(dim)
             except ImportError:
                 self._index = None
 
@@ -40,7 +40,8 @@ class FAISSVectorStore(VectorStore):
         metadatas = metadatas or [{}] * len(documents)
         embeddings = await self._embedding_fn.embed_documents(documents)
         embeddings_arr = np.array(embeddings, dtype=np.float32)
-        self._ensure_index()
+        dim = embeddings_arr.shape[1] if len(embeddings_arr) > 0 else 1024
+        self._ensure_index(dim)
         if self._index is not None:
             self._index.add(embeddings_arr)
         self._documents.extend(documents)

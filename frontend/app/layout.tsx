@@ -22,6 +22,9 @@ export default function RootLayout({
             <a href="/forecast" className="text-slate-400 hover:text-white">
               Forecast
             </a>
+            <a href="/data" className="text-slate-400 hover:text-white">
+              Data
+            </a>
             <a href="/assistant" className="text-slate-400 hover:text-white">
               AI Assistant
             </a>

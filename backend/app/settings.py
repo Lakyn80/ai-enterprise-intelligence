@@ -20,8 +20,7 @@ class Settings(BaseSettings):
     # Security
     api_key_admin: str = "dev-admin-key-change-in-production"
 
-    # LLM
-    llm_provider_default: str = "openai"
+    # LLM (modulární, default deepseek)
     openai_api_key: str = ""
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
@@ -29,8 +28,9 @@ class Settings(BaseSettings):
     # RAG
     rag_enabled: bool = True
     vectorstore: str = "chroma"
-    embeddings_provider: str = "openai"
+    embeddings_provider: str = "deepseek"  # deepseek | openai | local
     rag_collection_name: str = "retail_knowledge"
+    rag_chroma_path: str = "./chroma_db"
 
     # Application
     log_level: str = "INFO"

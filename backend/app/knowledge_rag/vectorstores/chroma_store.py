@@ -17,7 +17,7 @@ class ChromaVectorStore(VectorStore):
     def __init__(self, embedding_provider: Any):
         self._embedding_provider = embedding_provider
         self._client = chromadb.PersistentClient(
-            path="./chroma_db",
+            path=settings.rag_chroma_path,
             settings=ChromaSettings(anonymized_telemetry=False),
         )
         self._collection = self._client.get_or_create_collection(

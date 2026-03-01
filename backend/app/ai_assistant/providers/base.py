@@ -5,7 +5,7 @@ from typing import Any
 
 
 class LLMProvider(ABC):
-    """Interface for LLM providers (OpenAI, DeepSeek, etc.)."""
+    """Interface for LLM providers."""
 
     @abstractmethod
     async def generate(

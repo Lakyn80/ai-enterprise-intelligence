@@ -36,6 +36,7 @@ services:
       DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/retail_forecast
       REDIS_URL: redis://redis:6379/0
       artifacts_path: /app/artifacts
+      RAG_CHROMA_PATH: /app/chroma_db
     env_file:
       - .env
     depends_on:
@@ -45,14 +46,19 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/app:/app/app
+      - ./backend/scripts:/app/scripts
       - model_artifacts:/app/artifacts
+      - chroma_data:/app/chroma_db
+      - ./data:/data
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
-      - "3000:3000"
+      - "3030:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     env_file:
@@ -63,3 +69,4 @@ services:
 volumes:
   postgres_data:
   model_artifacts:
+  chroma_data:
