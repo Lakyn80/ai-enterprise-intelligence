@@ -31,6 +31,9 @@ export default function RootLayout({
             <a href="/knowledge" className="text-slate-400 hover:text-white">
               Knowledge
             </a>
+            <a href="/admin" className="ml-auto text-slate-500 hover:text-slate-300 text-sm">
+              Admin
+            </a>
           </div>
         </nav>
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

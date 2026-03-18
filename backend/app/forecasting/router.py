@@ -104,14 +104,28 @@ async def get_historical_data(
 
 @router.post("/admin/train", dependencies=[Depends(verify_api_key)])
 async def train_model_endpoint(
-    from_date: date,
-    to_date: date,
     session: AsyncSessionDep,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    split_date: date | None = None,
 ):
-    """Train forecasting model (API key required)."""
+    """
+    Train forecasting model (API key required).
+
+    from_date / to_date are optional.  When omitted the service automatically
+    selects the maximum available historical window from the database, capped at
+    3 years back from the latest row:
+        to_date   = max(sales_facts.date)
+        from_date = max(min_db_date, to_date - 3 years)
+
+    Optional: pass split_date to perform a time-based train/test split and get
+    out-of-sample evaluation metrics (MAE, RMSE, MAPE) in the response.
+    The model is trained only on [from_date, split_date) with zero leakage from the
+    held-out [split_date, to_date] evaluation window.
+    """
     service = get_forecasting_service(session)
     try:
-        result = await service.train(from_date, to_date)
+        result = await service.train(from_date, to_date, split_date=split_date)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

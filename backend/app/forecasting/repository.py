@@ -108,6 +108,15 @@ class ForecastingRepository:
         from_date = max_date - timedelta(days=min_days)
         return await self.get_sales_df(from_date, max_date, product_ids)
 
+    async def get_date_range(self) -> tuple["date | None", "date | None"]:
+        """Return (min_date, max_date) across all sales_facts rows."""
+        from sqlalchemy import func
+        result = await self._session.execute(
+            select(func.min(SalesFact.date), func.max(SalesFact.date))
+        )
+        row = result.one()
+        return row[0], row[1]
+
     async def get_product_list(self) -> list[str]:
         """Get distinct product IDs."""
         from sqlalchemy import distinct, select

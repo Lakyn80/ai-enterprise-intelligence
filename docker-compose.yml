@@ -1,6 +1,12 @@
+networks:
+  app_net:
+    driver: bridge
+
 services:
   postgres:
     image: postgres:16-alpine
+    networks:
+      - app_net
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -17,6 +23,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    networks:
+      - app_net
     ports:
       - "6379:6379"
     healthcheck:
@@ -29,6 +37,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    networks:
+      - app_net
     ports:
       - "8000:8000"
     environment:
@@ -57,6 +67,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
+    networks:
+      - app_net
     ports:
       - "3030:3000"
     environment:

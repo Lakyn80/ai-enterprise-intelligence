@@ -1,8 +1,26 @@
 """Forecasting Pydantic schemas."""
 
 from datetime import date
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class BacktestDateRange(BaseModel):
+    train_start: str
+    train_end: str
+    test_start: str
+    test_end: str
+
+
+class BacktestEvaluation(BaseModel):
+    """Structured backtesting evaluation result."""
+
+    mae: float
+    rmse: float
+    mape: float
+    n_samples: int
+    date_range: BacktestDateRange | None = None
 
 
 class ForecastPoint(BaseModel):

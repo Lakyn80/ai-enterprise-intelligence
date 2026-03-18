@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 import json
+import logging
 import os
 import uuid
 
@@ -12,6 +13,7 @@ import pandas as pd
 from app.forecasting.features import engineer_features
 from app.settings import settings
 
+logger = logging.getLogger(__name__)
 
 # Features used by the model (must match training)
 FEATURE_COLS = [
@@ -40,26 +42,61 @@ def train_model(
     df: pd.DataFrame,
     data_from: date,
     data_to: date,
+    split_date: date | None = None,
     artifacts_dir: str | None = None,
 ) -> tuple[lgb.Booster, dict]:
     """
     Train LightGBM regressor on prepared data.
-    Returns (model, metrics_dict).
+
+    When split_date is provided:
+      - Trains on rows with date < split_date  (zero data leakage)
+      - Evaluates MAE/RMSE/MAPE on rows with date >= split_date (out-of-sample)
+
+    Without split_date:
+      - Trains on all data
+      - Evaluates on training data (in-sample; reported as eval_source='train')
+
+    Returns (booster, metrics_dict).
     """
     artifacts_dir = artifacts_dir or settings.artifacts_path
     os.makedirs(artifacts_dir, exist_ok=True)
 
+    # Feature engineering on full DataFrame so lag/rolling features for the test
+    # portion reference real history from the training window.
     df = engineer_features(df)
     df["target"] = np.log1p(df[TARGET_COL])
-    # Ensure all feature cols exist
     for col in FEATURE_COLS:
         if col not in df.columns:
             df[col] = 0
 
-    X = df[FEATURE_COLS]
-    y = df["target"]
+    if split_date is not None:
+        split_ts = pd.Timestamp(split_date)
+        train_mask = pd.to_datetime(df[DATE_COL]) < split_ts
+        test_mask = pd.to_datetime(df[DATE_COL]) >= split_ts
+        train_df = df[train_mask]
+        test_df = df[test_mask]
+        if len(train_df) < 50:
+            raise ValueError(
+                f"Insufficient training rows before split_date {split_date} "
+                f"(got {len(train_df)}, need ≥ 50)"
+            )
+        logger.info(
+            "Time-based split: training on %d rows [%s → %s), evaluating on %d rows [%s → %s]",
+            len(train_df),
+            data_from,
+            split_date,
+            len(test_df),
+            split_date,
+            data_to,
+        )
+    else:
+        train_df = df
+        test_df = None
+        logger.info("Training on full dataset: %d rows [%s → %s]", len(df), data_from, data_to)
 
-    # Deterministic training
+    X_train = train_df[FEATURE_COLS]
+    y_train = train_df["target"]
+
     params = {
         "objective": "regression",
         "metric": "mae",
@@ -73,12 +110,39 @@ def train_model(
     }
 
     model = lgb.LGBMRegressor(**params)
-    model.fit(X, y)
+    model.fit(X_train, y_train)
 
-    preds = model.predict(X)
-    quantity_pred = np.expm1(preds)
-    mae = float(np.mean(np.abs(quantity_pred - df[TARGET_COL])))
-    mape = float(np.mean(np.abs((quantity_pred - df[TARGET_COL]) / (df[TARGET_COL] + 1e-8)))) * 100
+    # --- Evaluation ---
+    if test_df is not None and not test_df.empty:
+        X_test = test_df[FEATURE_COLS].fillna(0)
+        quantity_pred = np.expm1(model.predict(X_test))
+        actuals = test_df[TARGET_COL].values
+        eval_source = "test"
+        n_eval = int(len(actuals))
+    else:
+        quantity_pred = np.expm1(model.predict(X_train))
+        actuals = train_df[TARGET_COL].values
+        eval_source = "train"
+        n_eval = int(len(actuals))
+
+    errors = quantity_pred - actuals
+    mae = float(np.mean(np.abs(errors)))
+    rmse = float(np.sqrt(np.mean(errors ** 2)))
+    nonzero = actuals > 0
+    mape = (
+        float(np.mean(np.abs(errors[nonzero] / actuals[nonzero]))) * 100
+        if nonzero.any()
+        else 0.0
+    )
+
+    logger.info(
+        "Evaluation (%s) – MAE: %.4f  RMSE: %.4f  MAPE: %.2f%%  n=%d",
+        eval_source,
+        mae,
+        rmse,
+        mape,
+        n_eval,
+    )
 
     version = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
     filename = f"lgb_{version}.txt"
@@ -91,15 +155,27 @@ def train_model(
         "trained_at": datetime.utcnow().isoformat(),
         "data_from": data_from.isoformat(),
         "data_to": data_to.isoformat(),
+        "split_date": split_date.isoformat() if split_date else None,
         "mae": mae,
+        "rmse": rmse,
         "mape": mape,
+        "n_eval_samples": n_eval,
+        "eval_source": eval_source,
         "feature_cols": FEATURE_COLS,
     }
     meta_path = filepath.replace(".txt", "_meta.json")
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
-    return model.booster_, {"mae": mae, "mape": mape, "version": version, "file_path": filepath}
+    return model.booster_, {
+        "mae": mae,
+        "rmse": rmse,
+        "mape": mape,
+        "n_eval_samples": n_eval,
+        "eval_source": eval_source,
+        "version": version,
+        "file_path": filepath,
+    }
 
 
 def load_model(file_path: str) -> lgb.Booster:
