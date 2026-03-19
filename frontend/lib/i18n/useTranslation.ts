@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { type Locale, getTranslations } from "./translations";
 
+export type { Locale };
+
 export function useTranslation(defaultLocale: Locale = "en") {
   const [locale, setLocale] = useState<Locale>(defaultLocale);
   const tr = getTranslations(locale);

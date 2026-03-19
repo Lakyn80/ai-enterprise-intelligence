@@ -49,6 +49,29 @@ class FAISSVectorStore(VectorStore):
         self._ids.extend(ids[:len(documents)])
         return ids[:len(documents)]
 
+    @staticmethod
+    def _matches_where(meta: dict[str, Any], where: dict[str, Any]) -> bool:
+        """Evaluate a ChromaDB-style where clause against a metadata dict."""
+        if "$and" in where:
+            return all(FAISSVectorStore._matches_where(meta, clause) for clause in where["$and"])
+        if "$or" in where:
+            return any(FAISSVectorStore._matches_where(meta, clause) for clause in where["$or"])
+        # Simple field equality ({"field": "value"} or {"field": {"$eq": "value"}})
+        for key, val in where.items():
+            if key.startswith("$"):
+                continue
+            if isinstance(val, dict):
+                op = list(val.keys())[0]
+                v = list(val.values())[0]
+                if op == "$eq" and meta.get(key) != v:
+                    return False
+                if op == "$ne" and meta.get(key) == v:
+                    return False
+            else:
+                if meta.get(key) != val:
+                    return False
+        return True
+
     async def similarity_search(
         self,
         query: str,
@@ -59,14 +82,13 @@ class FAISSVectorStore(VectorStore):
             return []
         q_emb = await self._embedding_fn.embed_query(query)
         q_arr = np.array([q_emb], dtype=np.float32)
-        # Fetch more candidates when filtering so we have enough after the where clause
         fetch_k = min(len(self._documents), k * 4 if where else k)
         _, indices = self._index.search(q_arr, fetch_k)
         results = []
         for idx in indices[0]:
             if 0 <= idx < len(self._documents):
                 meta = self._metadatas[idx] if idx < len(self._metadatas) else {}
-                if where and not all(meta.get(key) == val for key, val in where.items()):
+                if where and not self._matches_where(meta, where):
                     continue
                 results.append({"content": self._documents[idx], "metadata": meta})
                 if len(results) == k:
