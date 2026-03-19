@@ -134,7 +134,8 @@ async def run_agent(
             }
             for tc in tool_calls
         ]
-        messages.append({"role": "assistant", "content": content, "tool_calls": api_tool_calls})
+        # DeepSeek requires content=null (not "") when tool_calls are present
+        messages.append({"role": "assistant", "content": content or None, "tool_calls": api_tool_calls})
         messages.extend(tool_messages)
 
     return (

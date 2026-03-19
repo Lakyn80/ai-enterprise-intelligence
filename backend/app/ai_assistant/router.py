@@ -1,6 +1,6 @@
 """AI Assistant API routes."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.deps import AsyncSessionDep
 from app.ai_assistant.schemas import ChatRequest, ChatResponse, ExplainForecastRequest
@@ -26,13 +26,16 @@ async def assistant_chat(
     forecasting_service = await get_forecasting_service(session)
     forecasting_repo = ForecastingRepository(session)
     knowledge_service = KnowledgeService() if settings.rag_enabled else None
-    answer, used_tools, citations = await chat(
-        message=body.message,
-        provider_name=body.provider,
-        forecasting_service=forecasting_service,
-        forecasting_repo=forecasting_repo,
-        knowledge_service=knowledge_service,
-    )
+    try:
+        answer, used_tools, citations = await chat(
+            message=body.message,
+            provider_name=body.provider,
+            forecasting_service=forecasting_service,
+            forecasting_repo=forecasting_repo,
+            knowledge_service=knowledge_service,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
     return ChatResponse(
         answer=answer,
         used_tools=used_tools,
@@ -55,13 +58,16 @@ async def explain_forecast(
     forecasting_service = await get_forecasting_service(session)
     forecasting_repo = ForecastingRepository(session)
     knowledge_service = KnowledgeService() if settings.rag_enabled else None
-    answer, used_tools, citations = await chat(
-        message=message,
-        provider_name=body.provider,
-        forecasting_service=forecasting_service,
-        forecasting_repo=forecasting_repo,
-        knowledge_service=knowledge_service,
-    )
+    try:
+        answer, used_tools, citations = await chat(
+            message=message,
+            provider_name=body.provider,
+            forecasting_service=forecasting_service,
+            forecasting_repo=forecasting_repo,
+            knowledge_service=knowledge_service,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
     return ChatResponse(
         answer=answer,
         used_tools=used_tools,
