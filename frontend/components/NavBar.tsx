@@ -63,13 +63,6 @@ export function NavBar() {
             </button>
           ))}
         </div>
-
-        <Link
-          href="/admin"
-          className="ml-3 text-sm text-slate-500 hover:text-slate-300"
-        >
-          {t.nav.admin}
-        </Link>
       </div>
     </nav>
   );
