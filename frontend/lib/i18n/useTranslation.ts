@@ -1,12 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { type Locale, getTranslations } from "./translations";
-
-export type { Locale };
-
-export function useTranslation(defaultLocale: Locale = "en") {
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  const tr = getTranslations(locale);
-  return { locale, setLocale, tr };
-}
+// Re-export for components that don't need the full context
+export type { Locale } from "./translations";
+export { getT } from "./translations";
+export { useLocale } from "./LocaleContext";

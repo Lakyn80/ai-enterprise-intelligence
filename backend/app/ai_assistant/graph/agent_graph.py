@@ -10,14 +10,30 @@ from app.ai_assistant.tools.forecast_tools import (
     get_forecast_tools_spec,
     get_scenario_price_change,
 )
-from app.ai_assistant.tools.data_tools import get_sales_summary, get_data_tools_spec
+from app.ai_assistant.tools.data_tools import (
+    get_sales_summary,
+    get_category_sales,
+    get_all_products_summary,
+    get_data_tools_spec,
+)
 from app.ai_assistant.tools.knowledge_tools import (
     query_knowledge,
     get_knowledge_tools_spec,
 )
 
 
-SYSTEM_PROMPT = """You are an AI analyst assistant for retail forecasting. You MUST base your answers ONLY on data returned by the tools you call. You must NEVER invent or guess numeric values. If the user asks for a number that is not available in tool outputs, say that you need that data and suggest which metric or tool might provide it. Be concise and data-driven."""
+SYSTEM_PROMPT = """You are an AI analyst assistant for retail forecasting. You MUST base your answers ONLY on data returned by the tools you call. You must NEVER invent or guess numeric values.
+
+Available data tools:
+- get_sales_summary: single product summary (use for individual product queries)
+- get_category_sales: all products in a category ranked by revenue (use for category-level questions: "top products in Furniture", "which products drive Electronics revenue", etc.)
+- get_all_products_summary: ALL products across ALL categories ranked by revenue (use for cross-product comparisons, overall rankings, volatility analysis)
+- get_forecast: future sales forecast for a product
+- get_scenario_price_change: simulate price change impact
+
+Always use get_category_sales when asked about a specific category. Use get_all_products_summary when comparing across categories or ranking all products. Use a representative date range (e.g. last available year) when the user doesn't specify dates — pick a wide range like 2022-01-01 to 2024-12-31.
+
+Be concise and data-driven. Present numbers in a clear, ranked format."""
 
 
 def _parse_tool_args(args: str) -> dict[str, Any]:
@@ -58,6 +74,19 @@ async def execute_tool(
         fd = date.fromisoformat(arguments.get("from_date", "2024-01-01"))
         td = date.fromisoformat(arguments.get("to_date", "2024-01-31"))
         result = await get_sales_summary(forecasting_repo, pid, fd, td)
+        return json.dumps(result)
+
+    if name == "get_category_sales":
+        cat = arguments.get("category", "")
+        fd = date.fromisoformat(arguments.get("from_date", "2022-01-01"))
+        td = date.fromisoformat(arguments.get("to_date", "2024-12-31"))
+        result = await get_category_sales(forecasting_repo, cat, fd, td)
+        return json.dumps(result)
+
+    if name == "get_all_products_summary":
+        fd = date.fromisoformat(arguments.get("from_date", "2022-01-01"))
+        td = date.fromisoformat(arguments.get("to_date", "2024-12-31"))
+        result = await get_all_products_summary(forecasting_repo, fd, td)
         return json.dumps(result)
 
     if name == "query_knowledge":

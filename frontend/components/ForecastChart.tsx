@@ -1,6 +1,8 @@
 "use client";
 
 import type { ForecastResponse } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/LocaleContext";
+import { getT } from "@/lib/i18n/translations";
 
 interface ActualPoint {
   date: string;
@@ -13,10 +15,13 @@ interface Props {
 }
 
 export function ForecastChart({ data, actuals }: Props) {
+  const { locale } = useLocale();
+  const t = getT(locale).forecast;
+
   if (!data.points.length)
     return (
       <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-8 text-center text-slate-400">
-        No forecast data. Load data and train the model first.
+        {t.noData}
       </div>
     );
 
@@ -42,10 +47,10 @@ export function ForecastChart({ data, actuals }: Props) {
         {hasActuals && (
           <div className="flex gap-4 text-xs text-slate-400">
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2 w-4 rounded bg-emerald-600" /> Predikce
+              <span className="inline-block h-2 w-4 rounded bg-emerald-600" /> {t.chartPredicted}
             </span>
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2 w-4 rounded bg-amber-400/70" /> Skutečnost
+              <span className="inline-block h-2 w-4 rounded bg-amber-400/70" /> {t.chartActual}
             </span>
           </div>
         )}
@@ -73,7 +78,7 @@ export function ForecastChart({ data, actuals }: Props) {
                 style={{ minWidth: 6, height: BAR_H + 20 }}
                 title={
                   actual != null
-                    ? `${p.date}\nPredikce: ${p.predicted_quantity.toFixed(1)}\nSkutečnost: ${actual.toFixed(1)}\nChyba: ${diff}%`
+                    ? `${p.date}\n${t.colPredicted}: ${p.predicted_quantity.toFixed(1)}\n${t.colActual}: ${actual.toFixed(1)}\n${t.colError}: ${diff}%`
                     : `${p.date}: ${p.predicted_quantity.toFixed(1)}`
                 }
               >
@@ -104,11 +109,11 @@ export function ForecastChart({ data, actuals }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-600 text-left text-slate-400">
-              <th className="p-2">Datum</th>
-              <th className="p-2">Predikce</th>
-              {hasActuals && <th className="p-2">Skutečnost</th>}
-              {hasActuals && <th className="p-2">Chyba %</th>}
-              <th className="p-2">Tržby (pred.)</th>
+              <th className="p-2">{t.colDate}</th>
+              <th className="p-2">{t.colPredicted}</th>
+              {hasActuals && <th className="p-2">{t.colActual}</th>}
+              {hasActuals && <th className="p-2">{t.colError}</th>}
+              <th className="p-2">{t.colRevenue}</th>
             </tr>
           </thead>
           <tbody>

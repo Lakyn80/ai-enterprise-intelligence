@@ -3,8 +3,13 @@
 import { useState } from "react";
 import { seedData, trainModel } from "@/lib/api";
 import type { TrainResult } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/LocaleContext";
+import { getT } from "@/lib/i18n/translations";
 
 export default function AdminPage() {
+  const { locale } = useLocale();
+  const t = getT(locale).admin;
+  const tc = getT(locale).common;
   const [apiKey, setApiKey] = useState("");
 
   // Seed state
@@ -28,7 +33,7 @@ export default function AdminPage() {
       const res = await seedData(apiKey);
       setSeedResult(res.message);
     } catch (e) {
-      setSeedError(e instanceof Error ? e.message : "Chyba");
+      setSeedError(e instanceof Error ? e.message : t.error);
     } finally {
       setSeedLoading(false);
     }
@@ -42,7 +47,7 @@ export default function AdminPage() {
       const res = await trainModel(fromDate, toDate, apiKey, splitDate || undefined);
       setTrainResult(res);
     } catch (e) {
-      setTrainError(e instanceof Error ? e.message : "Chyba");
+      setTrainError(e instanceof Error ? e.message : t.error);
     } finally {
       setTrainLoading(false);
     }
@@ -50,11 +55,11 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-emerald-400">Admin</h1>
+      <h1 className="text-2xl font-bold text-emerald-400">{t.title}</h1>
 
       {/* API Key */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-        <label className="block text-sm font-medium text-slate-400">API Key</label>
+        <label className="block text-sm font-medium text-slate-400">{t.apiKey}</label>
         <input
           type="password"
           value={apiKey}
@@ -66,16 +71,14 @@ export default function AdminPage() {
 
       {/* Seed demo data */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-6">
-        <h2 className="mb-1 text-lg font-semibold text-white">1. Seed demo dat</h2>
-        <p className="mb-4 text-sm text-slate-400">
-          Vytvoří 120 dní historických dat pro produkty P001, P002, P003. Přeskočí, pokud data už existují.
-        </p>
+        <h2 className="mb-1 text-lg font-semibold text-white">{t.seedTitle}</h2>
+        <p className="mb-4 text-sm text-slate-400">{t.seedDesc}</p>
         <button
           onClick={handleSeed}
           disabled={seedLoading || !apiKey}
           className="rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
-          {seedLoading ? "Seeduji..." : "Seed data"}
+          {seedLoading ? t.seeding : t.seedBtn}
         </button>
         {seedResult && (
           <p className="mt-3 text-sm text-emerald-400">{seedResult}</p>
@@ -87,21 +90,16 @@ export default function AdminPage() {
 
       {/* Train model */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-6">
-        <h2 className="mb-1 text-lg font-semibold text-white">2. Trénink modelu</h2>
-        <p className="mb-4 text-sm text-slate-400">
-          Natrénuje LightGBM model na historických datech. Volitelně nastav{" "}
-          <span className="text-slate-300">split_date</span> pro out-of-sample evaluaci (model se trénuje
-          pouze na datech před split_date, metriky se počítají na zbytku).
-        </p>
+        <h2 className="mb-1 text-lg font-semibold text-white">{t.trainTitle}</h2>
+        <p className="mb-4 text-sm text-slate-400">{t.trainDesc}</p>
         <p className="mb-4 rounded border border-slate-700 bg-slate-900/50 px-3 py-2 text-xs text-slate-400">
-          <span className="text-emerald-400">Od / Do: ponech prázdné</span> — backend automaticky zvolí
-          maximálně dostupný rozsah, max. 3 roky zpět od posledního záznamu v DB.
+          <span className="text-emerald-400">{t.trainHint}</span>
         </p>
 
         <div className="flex flex-wrap gap-4">
           <div>
             <label className="block text-sm text-slate-400">
-              Od <span className="text-slate-500">(prázdné = auto)</span>
+              {t.fromLabel} <span className="text-slate-500">{t.autoLabel}</span>
             </label>
             <input
               type="date"
@@ -112,7 +110,7 @@ export default function AdminPage() {
           </div>
           <div>
             <label className="block text-sm text-slate-400">
-              Do <span className="text-slate-500">(prázdné = auto)</span>
+              {t.toLabel} <span className="text-slate-500">{t.autoLabel}</span>
             </label>
             <input
               type="date"
@@ -123,8 +121,7 @@ export default function AdminPage() {
           </div>
           <div>
             <label className="block text-sm text-slate-400">
-              Split date{" "}
-              <span className="text-slate-500">(volitelné)</span>
+              {t.splitLabel} <span className="text-slate-500">{t.optional}</span>
             </label>
             <input
               type="date"
@@ -139,7 +136,7 @@ export default function AdminPage() {
               disabled={trainLoading || !apiKey}
               className="rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
-              {trainLoading ? "Trénuji..." : "Spustit trénink"}
+              {trainLoading ? t.training : t.trainBtn}
             </button>
           </div>
         </div>
@@ -153,7 +150,7 @@ export default function AdminPage() {
         {trainResult && (
           <div className="mt-4 rounded-lg border border-emerald-800 bg-emerald-950/30 p-4">
             <p className="mb-2 text-sm font-medium text-emerald-400">
-              Model natrénován &nbsp;·&nbsp; verze {trainResult.version}
+              {t.trainedMsg} {trainResult.version}
             </p>
             <div className="flex flex-wrap gap-6 text-sm text-slate-300">
               <span>
@@ -171,9 +168,9 @@ export default function AdminPage() {
             </div>
             {trainResult.date_range && (
               <p className="mt-2 text-xs text-slate-500">
-                train {trainResult.date_range.train_start} → {trainResult.date_range.train_end}
+                {tc.train} {trainResult.date_range.train_start} → {trainResult.date_range.train_end}
                 &nbsp;|&nbsp;
-                test {trainResult.date_range.test_start} → {trainResult.date_range.test_end}
+                {tc.test} {trainResult.date_range.test_start} → {trainResult.date_range.test_end}
               </p>
             )}
           </div>

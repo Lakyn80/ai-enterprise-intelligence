@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { fetchScenario } from "@/lib/api";
 import type { ScenarioResponse } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/LocaleContext";
+import { getT } from "@/lib/i18n/translations";
 
 interface ScenarioFormProps {
   productId: string;
@@ -11,6 +13,8 @@ interface ScenarioFormProps {
 }
 
 export function ScenarioForm({ productId, fromDate, toDate }: ScenarioFormProps) {
+  const { locale } = useLocale();
+  const t = getT(locale).forecast;
   const [priceDelta, setPriceDelta] = useState(5);
   const [result, setResult] = useState<ScenarioResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,10 +40,10 @@ export function ScenarioForm({ productId, fromDate, toDate }: ScenarioFormProps)
 
   return (
     <div className="space-y-4 rounded-lg border border-slate-700 bg-slate-800/30 p-6">
-      <h2 className="font-semibold text-white">Price Change Scenario</h2>
+      <h2 className="font-semibold text-white">{t.scenarioTitle}</h2>
       <div className="flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-sm text-slate-400">Price change (%)</label>
+          <label className="block text-sm text-slate-400">{t.priceChange}</label>
           <input
             type="number"
             value={priceDelta}
@@ -52,7 +56,7 @@ export function ScenarioForm({ productId, fromDate, toDate }: ScenarioFormProps)
           disabled={loading}
           className="rounded bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-500 disabled:opacity-50"
         >
-          {loading ? "Computing..." : "Compare +5%"}
+          {loading ? t.computing : t.runScenario}
         </button>
       </div>
       {error && (

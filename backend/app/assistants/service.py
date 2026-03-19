@@ -212,12 +212,12 @@ async def ask_preset(
 
     query_en = preset.query_en
 
-    # 1. Cache check
-    cached = await assistant_cache.get(assistant_type, question_id)
+    # 1. Cache check (locale-aware)
+    cached = await assistant_cache.get(assistant_type, question_id, locale)
     if cached:
         logger.info(
-            "assistants | type=%s qid=%s status=cache_hit",
-            assistant_type, question_id,
+            "assistants | type=%s qid=%s locale=%s status=cache_hit",
+            assistant_type, question_id, locale,
         )
         return AssistantAnswer(
             question_id=question_id,
@@ -234,11 +234,12 @@ async def ask_preset(
         assistant_type, query_en, forecasting_service, forecasting_repo, question_id
     )
 
-    # 3. Store in cache
+    # 3. Store in cache (locale-aware)
     await assistant_cache.set(
         assistant_type,
         question_id,
         {"answer": answer, "citations": citations_raw, "used_tools": used_tools},
+        locale=locale,
     )
 
     return AssistantAnswer(

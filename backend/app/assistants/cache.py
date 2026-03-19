@@ -2,11 +2,11 @@
 Redis cache layer for preset assistant answers.
 
 Cache key schema:
-    assistants:{assistant_type}:{question_id}
-    e.g.  assistants:knowledge:k_001
+    assistants:{assistant_type}:{question_id}:{locale}
+    e.g.  assistants:knowledge:k_001:en
+          assistants:knowledge:k_001:cs
 
-One source answer (EN) is cached per question.
-Translations are applied at response time (cheap LLM call or client-side).
+One answer per question per locale is cached.
 TTL: 24 h by default, configurable via ASSISTANTS_CACHE_TTL env var.
 """
 
@@ -25,8 +25,8 @@ def _get_ttl() -> int:
     return getattr(settings, "assistants_cache_ttl", _DEFAULT_TTL)
 
 
-def _make_key(assistant_type: str, question_id: str) -> str:
-    return f"assistants:{assistant_type}:{question_id}"
+def _make_key(assistant_type: str, question_id: str, locale: str = "en") -> str:
+    return f"assistants:{assistant_type}:{question_id}:{locale}"
 
 
 class AssistantCache:
@@ -56,13 +56,13 @@ class AssistantCache:
 
     # ------------------------------------------------------------------
 
-    async def get(self, assistant_type: str, question_id: str) -> dict | None:
+    async def get(self, assistant_type: str, question_id: str, locale: str = "en") -> dict | None:
         """Return cached payload or None on miss / Redis unavailable."""
         client = await self._get_client()
         if client is None:
             return None
         try:
-            raw = await client.get(_make_key(assistant_type, question_id))
+            raw = await client.get(_make_key(assistant_type, question_id, locale))
             if raw:
                 return json.loads(raw)
         except Exception as exc:
@@ -74,6 +74,7 @@ class AssistantCache:
         assistant_type: str,
         question_id: str,
         payload: dict,
+        locale: str = "en",
         ttl: int | None = None,
     ) -> None:
         """Store payload in Redis. Silently ignores failures."""
@@ -82,19 +83,19 @@ class AssistantCache:
             return
         try:
             await client.set(
-                _make_key(assistant_type, question_id),
+                _make_key(assistant_type, question_id, locale),
                 json.dumps(payload, ensure_ascii=False),
                 ex=ttl or _get_ttl(),
             )
         except Exception as exc:
             logger.warning("Cache SET error: %s", exc)
 
-    async def delete(self, assistant_type: str, question_id: str) -> None:
+    async def delete(self, assistant_type: str, question_id: str, locale: str = "en") -> None:
         client = await self._get_client()
         if client is None:
             return
         try:
-            await client.delete(_make_key(assistant_type, question_id))
+            await client.delete(_make_key(assistant_type, question_id, locale))
         except Exception as exc:
             logger.warning("Cache DELETE error: %s", exc)
 

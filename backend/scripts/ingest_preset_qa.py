@@ -61,9 +61,22 @@ async def main(assistant_types: list[str], flush: bool, dry_run: bool) -> None:
                     citations = result.get("citations", [])
                     used_tools: list[str] = []
                 else:
-                    # Analyst: requires DB session — skip in standalone script
-                    print(f"    → analyst questions require DB; use /api/assistants/ask-preset")
-                    continue
+                    # Analyst: call the running API endpoint (needs live backend + DB)
+                    import httpx
+                    api_base = os.environ.get("INTERNAL_API_URL", "http://localhost:8000")
+                    url = f"{api_base}/api/assistants/ask-preset"
+                    async with httpx.AsyncClient(timeout=120) as http:
+                        resp = await http.post(url, json={
+                            "assistant_type": "analyst",
+                            "question_id": preset.id,
+                            "locale": "en",
+                        })
+                        resp.raise_for_status()
+                        data = resp.json()
+                    answer = data.get("answer", "")
+                    citations = data.get("citations", [])
+                    used_tools = data.get("used_tools", [])
+                    print(f"    → generated via API ({len(answer)} chars, tools: {used_tools})")
 
                 await assistant_cache.set(
                     atype,

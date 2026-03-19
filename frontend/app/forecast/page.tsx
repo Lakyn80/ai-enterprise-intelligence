@@ -5,6 +5,8 @@ import { ForecastChart } from "@/components/ForecastChart";
 import { ScenarioForm } from "@/components/ScenarioForm";
 import { fetchForecast, fetchProducts, fetchBacktest, fetchHistoricalData } from "@/lib/api";
 import type { BacktestResult, ForecastResponse } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/LocaleContext";
+import { getT } from "@/lib/i18n/translations";
 
 interface ActualPoint {
   date: string;
@@ -12,6 +14,9 @@ interface ActualPoint {
 }
 
 export default function ForecastPage() {
+  const { locale } = useLocale();
+  const t = getT(locale).forecast;
+  const tc = getT(locale).common;
   const [products, setProducts] = useState<string[]>([]);
   const [productId, setProductId] = useState("");
   const [fromDate, setFromDate] = useState("2023-06-01");
@@ -72,7 +77,7 @@ export default function ForecastPage() {
             rmse: null,
             mape: null,
             n_samples: 0,
-            message: "Backtest není dostupný (potřeba historická data)",
+            message: t.backtestUnavailable,
           })
         );
     }
@@ -102,11 +107,11 @@ export default function ForecastPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-emerald-400">Forecast Dashboard</h1>
+      <h1 className="text-2xl font-bold text-emerald-400">{t.title}</h1>
 
       <div className="flex flex-wrap gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
         <div>
-          <label className="block text-sm text-slate-400">Product ID</label>
+          <label className="block text-sm text-slate-400">{t.product}</label>
           <select
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
@@ -124,7 +129,7 @@ export default function ForecastPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-slate-400">From</label>
+          <label className="block text-sm text-slate-400">{t.from}</label>
           <input
             type="date"
             value={fromDate}
@@ -133,7 +138,7 @@ export default function ForecastPage() {
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-400">To</label>
+          <label className="block text-sm text-slate-400">{t.to}</label>
           <input
             type="date"
             value={toDate}
@@ -147,7 +152,7 @@ export default function ForecastPage() {
             disabled={loading}
             className="rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
-            {loading ? "Loading..." : "Load Forecast"}
+            {loading ? t.loading : t.load}
           </button>
         </div>
       </div>
@@ -160,7 +165,7 @@ export default function ForecastPage() {
 
       {backtest && (
         <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-4">
-          <h2 className="mb-2 font-semibold text-white">Backtest – přesnost modelu vs. skutečnost</h2>
+          <h2 className="mb-2 font-semibold text-white">{t.backtestTitle}</h2>
           {backtest.mae != null ? (
             <div className="flex flex-wrap gap-6 text-slate-300">
               <span>MAE: <span className="font-mono text-white">{backtest.mae.toFixed(2)}</span></span>
@@ -173,13 +178,11 @@ export default function ForecastPage() {
           )}
           {backtest.date_range && (
             <p className="mt-1 text-xs text-slate-500">
-              train {backtest.date_range.train_start} → {backtest.date_range.train_end} &nbsp;|&nbsp;
-              test {backtest.date_range.test_start} → {backtest.date_range.test_end}
+              {tc.train} {backtest.date_range.train_start} → {backtest.date_range.train_end} &nbsp;|&nbsp;
+              {tc.test} {backtest.date_range.test_start} → {backtest.date_range.test_end}
             </p>
           )}
-          <p className="mt-2 text-xs text-slate-500">
-            Porovná predikce s reálnými prodeji na historickém rozsahu dat.
-          </p>
+          <p className="mt-2 text-xs text-slate-500">{t.backtestNote}</p>
         </div>
       )}
 

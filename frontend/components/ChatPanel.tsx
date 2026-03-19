@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { fetchChat } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/LocaleContext";
+import { getT } from "@/lib/i18n/translations";
 
 export function ChatPanel() {
+  const { locale } = useLocale();
+  const t = getT(locale).assistant;
   const [message, setMessage] = useState("");
   const [provider, setProvider] = useState<"openai" | "deepseek">("deepseek");
   const [answer, setAnswer] = useState("");
@@ -46,7 +50,7 @@ export function ChatPanel() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Ask about forecasts, e.g. What happens if we increase price by 5%?"
+          placeholder={t.chatPlaceholder}
           className="flex-1 rounded border border-slate-600 bg-slate-900 px-4 py-2 text-white placeholder-slate-500"
         />
         <button
@@ -54,7 +58,7 @@ export function ChatPanel() {
           disabled={loading}
           className="rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         >
-          {loading ? "..." : "Send"}
+          {loading ? t.asking : t.send}
         </button>
       </div>
       {error && <div className="text-sm text-red-400">{error}</div>}
@@ -62,11 +66,11 @@ export function ChatPanel() {
         <div className="space-y-2 rounded border border-slate-600 bg-slate-900/50 p-4">
           <p className="text-slate-200 whitespace-pre-wrap">{answer}</p>
           {usedTools.length > 0 && (
-            <p className="text-xs text-slate-500">Tools: {usedTools.join(", ")}</p>
+            <p className="text-xs text-slate-500">{t.tools}: {usedTools.join(", ")}</p>
           )}
           {citations.length > 0 && (
             <div className="mt-2 border-t border-slate-700 pt-2">
-              <p className="text-xs font-medium text-slate-400">Citations</p>
+              <p className="text-xs font-medium text-slate-400">{t.citations}</p>
               <ul className="mt-1 list-inside list-disc text-xs text-slate-500">
                 {citations.map((c, i) => (
                   <li key={i}>{String((c as { document_id?: string }).document_id ?? c)}</li>
