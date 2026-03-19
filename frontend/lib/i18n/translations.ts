@@ -2,6 +2,18 @@ export type Locale = "en" | "cs" | "sk" | "ru";
 
 const t = {
   en: {
+    home: {
+      title: "Retail Forecast Platform",
+      desc: "Data-driven forecasting and AI-powered decision support for retail.",
+      cardForecast: "Forecast",
+      cardForecastDesc: "View demand forecasts and run price scenarios.",
+      cardAnalyst: "AI Analyst",
+      cardAnalystDesc: "Ask questions about forecasts and data.",
+      cardKnowledge: "Knowledge",
+      cardKnowledgeDesc: "Query internal documents and reports.",
+      cardData: "Data",
+      cardDataDesc: "Explore historical sales data and visualizations.",
+    },
     nav: {
       brand: "Retail Forecast",
       forecast: "Forecast",
@@ -98,6 +110,18 @@ const t = {
   },
 
   cs: {
+    home: {
+      title: "Retail Forecast Platform",
+      desc: "Datová analytika a AI podpora rozhodování pro retail.",
+      cardForecast: "Forecast",
+      cardForecastDesc: "Prohlížejte predikce poptávky a simulujte cenové scénáře.",
+      cardAnalyst: "AI Analytik",
+      cardAnalystDesc: "Ptejte se na forecasting a datové analýzy.",
+      cardKnowledge: "Znalosti",
+      cardKnowledgeDesc: "Vyhledávejte v interních dokumentech a reportech.",
+      cardData: "Data",
+      cardDataDesc: "Prozkoumejte historická prodejní data a vizualizace.",
+    },
     nav: {
       brand: "Retail Forecast",
       forecast: "Forecast",
@@ -194,6 +218,18 @@ const t = {
   },
 
   sk: {
+    home: {
+      title: "Retail Forecast Platform",
+      desc: "Dátová analytika a AI podpora rozhodovania pre retail.",
+      cardForecast: "Forecast",
+      cardForecastDesc: "Prezerajte predikcie dopytu a simulujte cenové scenáre.",
+      cardAnalyst: "AI Analytik",
+      cardAnalystDesc: "Pýtajte sa na forecasting a dátové analýzy.",
+      cardKnowledge: "Znalosti",
+      cardKnowledgeDesc: "Vyhľadávajte v interných dokumentoch a reportoch.",
+      cardData: "Dáta",
+      cardDataDesc: "Preskúmajte historické predajné dáta a vizualizácie.",
+    },
     nav: {
       brand: "Retail Forecast",
       forecast: "Forecast",
@@ -290,6 +326,18 @@ const t = {
   },
 
   ru: {
+    home: {
+      title: "Retail Forecast Platform",
+      desc: "Аналитика данных и AI-поддержка принятия решений для ритейла.",
+      cardForecast: "Прогноз",
+      cardForecastDesc: "Просматривайте прогнозы спроса и моделируйте ценовые сценарии.",
+      cardAnalyst: "ИИ Аналитик",
+      cardAnalystDesc: "Задавайте вопросы о прогнозировании и анализе данных.",
+      cardKnowledge: "Знания",
+      cardKnowledgeDesc: "Поиск по внутренним документам и отчётам.",
+      cardData: "Данные",
+      cardDataDesc: "Изучайте исторические данные продаж и визуализации.",
+    },
     nav: {
       brand: "Retail Forecast",
       forecast: "Прогноз",
