@@ -60,7 +60,7 @@ services:
     networks:
       - app_net
     ports:
-      - "3030:3000"
+      - "4000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
     env_file:
