@@ -11,6 +11,7 @@ from app.forecasting.router import router as forecasting_router
 from app.forecasting.pricing_router import router as pricing_router
 from app.ai_assistant.router import router as assistant_router
 from app.knowledge_rag.router import router as knowledge_router
+from app.assistants.router import router as assistants_router
 from app.settings import settings
 
 logger = get_logger(__name__)
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(forecasting_router)
     app.include_router(pricing_router)
     app.include_router(assistant_router)
+    app.include_router(assistants_router)
     if settings.rag_enabled:
         app.include_router(knowledge_router)
 

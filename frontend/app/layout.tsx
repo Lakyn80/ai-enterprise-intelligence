@@ -31,6 +31,12 @@ export default function RootLayout({
             <a href="/knowledge" className="text-slate-400 hover:text-white">
               Knowledge
             </a>
+            <a href="/assistants/knowledge" className="text-slate-400 hover:text-white">
+              🧠 Knowledge
+            </a>
+            <a href="/assistants/analyst" className="text-slate-400 hover:text-white">
+              🤖 Analyst
+            </a>
             <a href="/admin" className="ml-auto text-slate-500 hover:text-slate-300 text-sm">
               Admin
             </a>

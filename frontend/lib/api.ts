@@ -126,3 +126,79 @@ export async function fetchKnowledgeQuery(query: string) {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
+
+// ---------------------------------------------------------------------------
+// New Assistants API
+// ---------------------------------------------------------------------------
+
+export type AssistantType = "knowledge" | "analyst";
+export type Locale = "en" | "cs" | "sk" | "ru";
+
+export interface PresetQuestion {
+  id: string;
+  text: string;
+}
+
+export interface PresetsResponse {
+  assistant_type: AssistantType;
+  locale: Locale;
+  questions: PresetQuestion[];
+}
+
+export interface Citation {
+  source: string;
+  excerpt?: string;
+}
+
+export interface AssistantAnswer {
+  question_id: string | null;
+  query: string;
+  answer: string;
+  locale: Locale;
+  cached: boolean;
+  citations: Citation[];
+  used_tools: string[];
+}
+
+export async function fetchPresets(
+  assistantType: AssistantType,
+  locale: Locale = "en"
+): Promise<PresetsResponse> {
+  const r = await fetch(
+    `${API_BASE}/api/assistants/${assistantType}/presets?locale=${locale}`
+  );
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchAskPreset(
+  assistantType: AssistantType,
+  questionId: string,
+  locale: Locale = "en"
+): Promise<AssistantAnswer> {
+  const r = await fetch(`${API_BASE}/api/assistants/ask-preset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      assistant_type: assistantType,
+      question_id: questionId,
+      locale,
+    }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchAskCustom(
+  assistantType: AssistantType,
+  query: string,
+  locale: Locale = "en"
+): Promise<AssistantAnswer> {
+  const r = await fetch(`${API_BASE}/api/assistants/ask-custom`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ assistant_type: assistantType, query, locale }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
