@@ -11,8 +11,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: retail_forecast
-    ports:
-      - "5433:5432"
+    # no external port — only accessible within app_net
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,8 +24,7 @@ services:
     image: redis:7-alpine
     networks:
       - app_net
-    ports:
-      - "6379:6379"
+    # no external port — only accessible within app_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
