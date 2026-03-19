@@ -225,7 +225,7 @@ async def ask_preset(
             answer=cached["answer"],
             locale=locale,
             cached=True,
-            citations=[Citation(**c) for c in cached.get("citations", [])],
+            citations=[Citation(**c) for c in _normalise_citations(cached.get("citations", []))],
             used_tools=cached.get("used_tools", []),
         )
 
