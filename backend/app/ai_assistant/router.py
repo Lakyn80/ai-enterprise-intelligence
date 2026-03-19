@@ -23,7 +23,7 @@ async def assistant_chat(
     session: AsyncSessionDep,
 ):
     """Chat with AI analyst (modulární: openai/deepseek, default deepseek)."""
-    forecasting_service = get_forecasting_service(session)
+    forecasting_service = await get_forecasting_service(session)
     forecasting_repo = ForecastingRepository(session)
     knowledge_service = KnowledgeService() if settings.rag_enabled else None
     answer, used_tools, citations = await chat(
@@ -52,7 +52,7 @@ async def explain_forecast(
         "What drives the predictions? What patterns do you see in the data? "
         "Base your explanation only on the data and forecast values you retrieve."
     )
-    forecasting_service = get_forecasting_service(session)
+    forecasting_service = await get_forecasting_service(session)
     forecasting_repo = ForecastingRepository(session)
     knowledge_service = KnowledgeService() if settings.rag_enabled else None
     answer, used_tools, citations = await chat(
