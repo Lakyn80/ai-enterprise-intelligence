@@ -1,21 +1,83 @@
 """
-Assistants service — orchestrates: cache → RAG/LLM → cache write.
+Assistants service — orchestrates: idempotency → cache → RAG/LLM → cache write.
 
-Knowledge assistant:  answers preset + custom queries via KnowledgeService (RAG).
-Analyst assistant:    answers preset + custom queries via the LangGraph agent (tools).
+Retry + backoff wraps only external I/O (LLM provider, vector store).
+Failed requests (all retries exhausted) are pushed to DLQ.
+Status of every preset question is tracked in Redis.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.assistants.cache import assistant_cache
+from app.assistants.dlq import dlq
 from app.assistants.presets import AssistantType, Locale, get_preset_by_id, get_presets
+from app.assistants.retry import build_retry
 from app.assistants.schemas import AssistantAnswer, Citation, PresetQuestionOut
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Status tracking helpers (Redis key: assistants:status:{type}:{id})
+# ---------------------------------------------------------------------------
+
+import json
+from datetime import datetime, timezone
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def _set_status(
+    assistant_type: str,
+    question_id: str,
+    status: str,
+    latency_ms: int = 0,
+    error: str | None = None,
+) -> None:
+    try:
+        client = await assistant_cache._get_client()
+        if client is None:
+            return
+        key = f"assistants:status:{assistant_type}:{question_id}"
+        payload = {
+            "status": status,
+            "latency_ms": latency_ms,
+            "last_updated": _now_iso(),
+            "error": error,
+        }
+        await client.set(key, json.dumps(payload), ex=60 * 60 * 48)  # 48h
+    except Exception as exc:
+        logger.warning("Status write failed: %s", exc)
+
+
+async def get_all_statuses(assistant_type: AssistantType) -> list[dict]:
+    """Return status for all preset questions of an assistant type."""
+    try:
+        client = await assistant_cache._get_client()
+        if client is None:
+            return []
+        pattern = f"assistants:status:{assistant_type}:*"
+        keys = await client.keys(pattern)
+        if not keys:
+            return []
+        values = await client.mget(*keys)
+        result = []
+        for key, raw in zip(keys, values):
+            question_id = key.split(":")[-1]
+            entry = {"question_id": question_id}
+            if raw:
+                entry.update(json.loads(raw))
+            result.append(entry)
+        return sorted(result, key=lambda x: x["question_id"])
+    except Exception as exc:
+        logger.warning("Status read failed: %s", exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -31,30 +93,28 @@ def list_presets(assistant_type: AssistantType, locale: Locale) -> list[PresetQu
 
 
 # ---------------------------------------------------------------------------
-# Knowledge assistant
+# External call wrappers — retry lives ONLY here
 # ---------------------------------------------------------------------------
 
 
-async def _answer_knowledge(query: str) -> tuple[str, list[dict]]:
-    """Call KnowledgeService.query() and return (answer, citations)."""
+async def _call_knowledge(query: str) -> tuple[str, list[dict]]:
+    """RAG query with retry. Raises on final failure."""
     from app.knowledge_rag.service import KnowledgeService
-
     svc = KnowledgeService()
-    result = await svc.query(query)
+
+    async for attempt in build_retry():
+        with attempt:
+            result = await svc.query(query)
+
     return result.get("answer", ""), result.get("citations", [])
 
 
-# ---------------------------------------------------------------------------
-# Analyst assistant
-# ---------------------------------------------------------------------------
-
-
-async def _answer_analyst(
+async def _call_analyst(
     query: str,
     forecasting_service: Any,
     forecasting_repo: Any,
 ) -> tuple[str, list[str], list[dict]]:
-    """Run the LangGraph agent and return (answer, used_tools, citations)."""
+    """LangGraph agent call with retry. Raises on final failure."""
     from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
     from app.ai_assistant.graph.agent_graph import run_agent
 
@@ -64,14 +124,74 @@ async def _answer_analyst(
         from app.knowledge_rag.service import KnowledgeService
         knowledge_service = KnowledgeService()
 
-    return await run_agent(
-        user_message=query,
-        provider=provider,
-        forecasting_service=forecasting_service,
-        forecasting_repo=forecasting_repo,
-        knowledge_service=knowledge_service,
-        rag_enabled=settings.rag_enabled,
-    )
+    async for attempt in build_retry():
+        with attempt:
+            result = await run_agent(
+                user_message=query,
+                provider=provider,
+                forecasting_service=forecasting_service,
+                forecasting_repo=forecasting_repo,
+                knowledge_service=knowledge_service,
+                rag_enabled=settings.rag_enabled,
+            )
+
+    return result  # (answer, used_tools, citations)
+
+
+# ---------------------------------------------------------------------------
+# Internal dispatch — logging, DLQ on failure
+# ---------------------------------------------------------------------------
+
+
+async def _generate(
+    assistant_type: AssistantType,
+    query: str,
+    forecasting_service: Any,
+    forecasting_repo: Any,
+    question_id: str | None = None,
+) -> tuple[str, list[dict], list[str]]:
+    """
+    Returns (answer, citations, used_tools).
+    On final failure: pushes to DLQ, re-raises.
+    """
+    t0 = time.monotonic()
+    try:
+        if assistant_type == "knowledge":
+            answer, citations = await _call_knowledge(query)
+            used_tools: list[str] = []
+        else:
+            answer, used_tools, citations = await _call_analyst(
+                query, forecasting_service, forecasting_repo
+            )
+
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        logger.info(
+            "assistants | type=%s qid=%s status=ok latency_ms=%d tools=%s",
+            assistant_type, question_id or "custom", latency_ms,
+            ",".join(used_tools) if used_tools else "-",
+        )
+        if question_id:
+            await _set_status(assistant_type, question_id, "ok", latency_ms)
+
+        return answer, _normalise_citations(citations), used_tools
+
+    except Exception as exc:
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        logger.error(
+            "assistants | type=%s qid=%s status=error latency_ms=%d error=%s",
+            assistant_type, question_id or "custom", latency_ms, exc,
+        )
+        if question_id:
+            await _set_status(assistant_type, question_id, "error",
+                              latency_ms, error=str(exc)[:200])
+        await dlq.push(
+            assistant_type=assistant_type,
+            query=query,
+            error=str(exc),
+            attempts=3,
+            question_id=question_id,
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -92,10 +212,13 @@ async def ask_preset(
 
     query_en = preset.query_en
 
-    # 1. Cache check (EN answer, locale-agnostic)
+    # 1. Cache check
     cached = await assistant_cache.get(assistant_type, question_id)
     if cached:
-        logger.debug("Cache HIT %s/%s", assistant_type, question_id)
+        logger.info(
+            "assistants | type=%s qid=%s status=cache_hit",
+            assistant_type, question_id,
+        )
         return AssistantAnswer(
             question_id=question_id,
             query=preset.text(locale),
@@ -106,10 +229,9 @@ async def ask_preset(
             used_tools=cached.get("used_tools", []),
         )
 
-    # 2. Generate answer
-    logger.debug("Cache MISS %s/%s — generating", assistant_type, question_id)
+    # 2. Generate (with retry inside _generate)
     answer, citations_raw, used_tools = await _generate(
-        assistant_type, query_en, forecasting_service, forecasting_repo
+        assistant_type, query_en, forecasting_service, forecasting_repo, question_id
     )
 
     # 3. Store in cache
@@ -152,29 +274,11 @@ async def ask_custom(
 
 
 # ---------------------------------------------------------------------------
-# Internal dispatch
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 
-async def _generate(
-    assistant_type: AssistantType,
-    query: str,
-    forecasting_service: Any,
-    forecasting_repo: Any,
-) -> tuple[str, list[dict], list[str]]:
-    """Return (answer, citations_list, used_tools_list)."""
-    if assistant_type == "knowledge":
-        answer, citations = await _answer_knowledge(query)
-        return answer, _normalise_citations(citations), []
-    else:
-        answer, used_tools, citations = await _answer_analyst(
-            query, forecasting_service, forecasting_repo
-        )
-        return answer, _normalise_citations(citations), used_tools
-
-
 def _normalise_citations(raw: list[Any]) -> list[dict]:
-    """Ensure every citation is a plain dict with 'source' key."""
     out: list[dict] = []
     for c in raw:
         if isinstance(c, dict):
