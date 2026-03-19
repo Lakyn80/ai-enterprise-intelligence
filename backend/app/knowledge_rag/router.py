@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.core.security import verify_api_key
+from app.db.session import AsyncSessionDep
 from app.knowledge_rag.schemas import IngestRequest, QueryRequest, QueryResponse
 from app.knowledge_rag.service import KnowledgeService
 
@@ -50,6 +51,14 @@ async def ingest_documents(body: IngestRequest):
     if body.folder_path:
         return await service.ingest_from_folder(body.folder_path)
     return {"status": "error", "message": "Provide folder_path or text"}
+
+
+@router.post("/knowledge/ingest-reports", dependencies=[Depends(verify_api_key)])
+async def ingest_reports(session: AsyncSessionDep):
+    """Generate text reports from DB sales data and ingest into ChromaDB."""
+    from app.knowledge_reports.service import KnowledgeReportService
+    svc = KnowledgeReportService(session)
+    return await svc.ingest_reports()
 
 
 @router.post("/knowledge/query", response_model=QueryResponse)

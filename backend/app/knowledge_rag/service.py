@@ -42,19 +42,48 @@ class KnowledgeService:
         ids = await self._store.add_documents(chunks, metadatas)
         return {"status": "ok", "ingested": len(ids)}
 
-    async def ingest_text(self, text: str, source: str = "upload") -> dict[str, Any]:
-        """Ingest raw text."""
+    async def ingest_text(
+        self,
+        text: str,
+        source: str = "upload",
+        metadata: dict[str, Any] | None = None,
+        context_prefix: str = "",
+    ) -> dict[str, Any]:
+        """
+        Ingest raw text into the vector store.
+
+        Args:
+            text:           Raw text to chunk and embed.
+            source:         Source identifier stored in metadata.
+            metadata:       Optional structured metadata (product_id, report_type, etc.)
+                            merged with {"source": source} for every chunk.
+            context_prefix: Prepended to each chunk before embedding to improve
+                            semantic relevance (e.g. "Product P0001 sales report: ").
+                            The prefix is stored but not duplicated in the chunk text.
+        """
         if not self._store:
             return {"status": "rag_disabled", "ingested": 0}
+
         chunks = list(chunk_text(text))
         if not chunks:
             return {"status": "ok", "ingested": 0}
-        metadatas = [{"source": source}] * len(chunks)
-        ids = await self._store.add_documents(chunks, metadatas)
+
+        base_meta: dict[str, Any] = {"source": source}
+        if metadata:
+            base_meta.update(metadata)
+
+        chunk_texts: list[str] = []
+        chunk_metas: list[dict] = []
+        for i, chunk in enumerate(chunks):
+            embed_text = f"{context_prefix}{chunk}" if context_prefix else chunk
+            chunk_texts.append(embed_text)
+            chunk_metas.append({**base_meta, "chunk_index": i, "total_chunks": len(chunks)})
+
+        ids = await self._store.add_documents(chunk_texts, chunk_metas)
         return {"status": "ok", "ingested": len(ids)}
 
     async def query(self, query: str) -> dict[str, Any]:
-        """Query RAG and return answer with citations."""
+        """Query RAG and return LLM-composed answer with citations."""
         if not self._store:
             return {"answer": "RAG is disabled.", "citations": []}
         docs = await self._store.similarity_search(query, k=4)
@@ -65,6 +94,25 @@ class KnowledgeService:
             {"document_id": d.get("metadata", {}).get("source", "unknown"), "chunk": d["content"][:200]}
             for d in docs
         ]
-        # Simple concatenation - in production use LLM to compose answer
-        answer = f"Based on the following excerpts:\n\n{context[:2000]}\n\n(For a more precise answer, ensure an LLM is configured.)"
+        try:
+            from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
+            llm = DeepSeekProvider()
+            result = await llm.generate([
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a helpful assistant for a retail forecasting platform. "
+                        "Answer the user's question based ONLY on the provided document excerpts. "
+                        "Be concise and cite relevant facts. If the excerpts don't contain enough "
+                        "information, say so clearly."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Document excerpts:\n\n{context[:4000]}\n\nQuestion: {query}",
+                },
+            ])
+            answer = result["content"] or "No answer generated."
+        except Exception:
+            answer = f"Based on the following excerpts:\n\n{context[:2000]}"
         return {"answer": answer, "citations": citations}

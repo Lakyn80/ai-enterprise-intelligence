@@ -27,6 +27,8 @@ class DeepSeekEmbeddingProvider(EmbeddingProvider):
         self._client = AsyncOpenAI(
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url.rstrip("/") + "/v1",
+            max_retries=0,  # fail fast → fallback to stub immediately
+            timeout=10.0,
         )
         self._fallback = StubEmbeddingProvider()
 

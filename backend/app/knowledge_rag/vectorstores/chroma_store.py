@@ -25,6 +25,8 @@ class ChromaVectorStore(VectorStore):
             metadata={"hnsw:space": "cosine"},
         )
 
+    _EMBED_BATCH_SIZE = 8  # max chunks per embedding API call
+
     async def add_documents(
         self,
         documents: list[str],
@@ -33,10 +35,17 @@ class ChromaVectorStore(VectorStore):
     ) -> list[str]:
         ids = ids or [str(uuid.uuid4()) for _ in documents]
         metadatas = metadatas or [{}] * len(documents)
-        embeddings = await self._embedding_provider.embed_documents(documents)
+
+        # Embed in small batches to avoid API payload/timeout limits
+        all_embeddings: list[list[float]] = []
+        for i in range(0, len(documents), self._EMBED_BATCH_SIZE):
+            batch = documents[i: i + self._EMBED_BATCH_SIZE]
+            batch_emb = await self._embedding_provider.embed_documents(batch)
+            all_embeddings.extend(batch_emb)
+
         self._collection.add(
             ids=ids[:len(documents)],
-            embeddings=embeddings,
+            embeddings=all_embeddings,
             documents=documents,
             metadatas=metadatas,
         )
