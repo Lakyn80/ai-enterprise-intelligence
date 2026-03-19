@@ -122,7 +122,19 @@ async def run_agent(
                         citations.append(c)
                 except Exception:
                     pass
-        messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+        # Convert to OpenAI/DeepSeek wire format before sending back to API
+        api_tool_calls = [
+            {
+                "id": tc.get("id", "unknown"),
+                "type": "function",
+                "function": {
+                    "name": tc.get("name", ""),
+                    "arguments": tc.get("arguments", "{}"),
+                },
+            }
+            for tc in tool_calls
+        ]
+        messages.append({"role": "assistant", "content": content, "tool_calls": api_tool_calls})
         messages.extend(tool_messages)
 
     return (
