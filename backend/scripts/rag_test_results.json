@@ -1,0 +1,460 @@
+{
+  "timestamp": "2026-03-19T10:34:09.488455",
+  "total_score": 245,
+  "max_score": 250,
+  "percent": 98.0,
+  "per_group": {
+    "category_trend": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    },
+    "category_volume": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    },
+    "product_volume": {
+      "score": 24,
+      "max": 25,
+      "pct": 96.0
+    },
+    "product_trend": {
+      "score": 23,
+      "max": 25,
+      "pct": 92.0
+    },
+    "promo": {
+      "score": 24,
+      "max": 25,
+      "pct": 96.0
+    },
+    "volatility": {
+      "score": 24,
+      "max": 25,
+      "pct": 96.0
+    },
+    "price": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    },
+    "category_top": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    },
+    "dates": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    },
+    "out_of_scope": {
+      "score": 25,
+      "max": 25,
+      "pct": 100.0
+    }
+  },
+  "questions": [
+    {
+      "id": 1,
+      "group": "category_trend",
+      "question": "Which categories have an increasing sales trend?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, the categories with an increasing sales trend are:\n\n- **Groceries**: \"30-day trend: increasing\"\n- **Electronics**: \"30-day trend: increasing\""
+    },
+    {
+      "id": 2,
+      "group": "category_trend",
+      "question": "Which category has a decreasing trend?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the categories with a decreasing 30-day trend are **Toys** and **Clothing**. The excerpts state:\n- For Toys: \"30-day trend: decreasing\"\n- For Clothing: \"30-day trend: decreasing\""
+    },
+    {
+      "id": 3,
+      "group": "category_trend",
+      "question": "What is the 30-day sales trend for the Furniture category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the 30-day sales trend for the Furniture category is \"stable\"."
+    },
+    {
+      "id": 4,
+      "group": "category_trend",
+      "question": "Is the Groceries category growing or shrinking?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the Groceries category is **growing**. The excerpts state: \"30-day trend: increasing\"."
+    },
+    {
+      "id": 5,
+      "group": "category_trend",
+      "question": "Compare the trends of Electronics and Clothing categories.",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, the 30-day trend for the **Electronics** category is \"increasing,\" while the 30-day trend for the **Clothing** category is \"decreasing.\""
+    },
+    {
+      "id": 6,
+      "group": "category_volume",
+      "question": "Which category has the highest total sales volume?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the category with the highest total sales volume is **Furniture** with \"2,016,166 units\".\n\nHere is the comparison of all total category sales values:\n- Groceries: \"1,988,272 units\"\n- Electronics: \"1,988,235 units\"\n- Toys: \"2,003,435 units\"\n- Clothing: \"1,979,474 units\"\n- Furniture: \"2,016,166 units\""
+    },
+    {
+      "id": 7,
+      "group": "category_volume",
+      "question": "Which category has the lowest total sales?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, the category with the lowest total sales is **Clothing** with \"Total category sales: 1,979,474 units\"."
+    },
+    {
+      "id": 8,
+      "group": "category_volume",
+      "question": "How many units did the Toys category sell in total?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the total sales for the Toys category is \"2,003,435 units\"."
+    },
+    {
+      "id": 9,
+      "group": "category_volume",
+      "question": "What is the average daily sales for Electronics?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the average daily sales for Electronics is \"2769.1 units/day\"."
+    },
+    {
+      "id": 10,
+      "group": "category_volume",
+      "question": "What are the top products in the Groceries category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the top products in the Groceries category are: \"P0001, P0013, P0009\"."
+    },
+    {
+      "id": 11,
+      "group": "product_volume",
+      "question": "Which product has the highest total sales?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the product with the highest total sales is Product P0016 with \"Total sales: 508,472 units\"."
+    },
+    {
+      "id": 12,
+      "group": "product_volume",
+      "question": "Which product has the lowest total sales?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the product with the lowest total sales is Product P0002 with \"Total sales: 487,827 units\"."
+    },
+    {
+      "id": 13,
+      "group": "product_volume",
+      "question": "What is the total sales of product P0005?",
+      "score": 4,
+      "reason": "required keywords found but missing any-keyword bonus",
+      "answer": "Based on the provided document excerpts, the total sales of product P0005 is \"503,648 units\"."
+    },
+    {
+      "id": 14,
+      "group": "product_volume",
+      "question": "How many units per day does P0014 sell on average?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, Product P0014 sells an average of \"694.4 units/day\"."
+    },
+    {
+      "id": 15,
+      "group": "product_volume",
+      "question": "What was the peak sales day for P0007 and how many units?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the peak sales day for product P0007 was \"2022-04-30\" with \"1,766 units.\""
+    },
+    {
+      "id": 16,
+      "group": "product_trend",
+      "question": "Which products have an increasing 30-day sales trend?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the products with an increasing 30-day sales trend are:\n- Product P0002: \"30-day trend: increasing\"\n- Product P0008: \"30-day trend: increasing\"\n- Product P0009: \"30-day trend: increasing\""
+    },
+    {
+      "id": 17,
+      "group": "product_trend",
+      "question": "Is P0001 trending up or down?",
+      "score": 3,
+      "reason": "missing: ['p0001']",
+      "answer": "Based on the provided document excerpts, the answer is: \"down\". The excerpts state: \"30-day trend: decreasing\"."
+    },
+    {
+      "id": 18,
+      "group": "product_trend",
+      "question": "What is the sales trend for P0009?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the sales trend for product P0009 is \"increasing,\" as stated in the \"Trends\" section: \"30-day trend: increasing\"."
+    },
+    {
+      "id": 19,
+      "group": "product_trend",
+      "question": "Which products are showing a decreasing trend?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, the products showing a decreasing 30-day trend are:\n- Product P0018: \"30-day trend: decreasing\"\n- Product P0012: \"30-day trend: decreasing\"\n- Product P0015: \"30-day trend: decreasing\"\n- Product P0001: \"30-day trend: decreasing\""
+    },
+    {
+      "id": 20,
+      "group": "product_trend",
+      "question": "Is P0016 trending up, down, or stable?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the 30-day trend for Product P0016 is described as \"stable.\" Therefore, P0016 is trending stable."
+    },
+    {
+      "id": 21,
+      "group": "promo",
+      "question": "Which product benefits the most from promotions?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, the product that benefits the most from promotions is **Product P0002**, with a promo lift of \"+13.9%\"."
+    },
+    {
+      "id": 22,
+      "group": "promo",
+      "question": "What is the promo lift for P0001?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "The promo lift for P0001 is \"+12.9% (684.4 vs 606.3 units/day)\"."
+    },
+    {
+      "id": 23,
+      "group": "promo",
+      "question": "Which products have a negative promotional lift?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the products with a negative promotional lift are:\n\n- Product P0013: \"Promo lift: -9.6% (682.6 vs 755.5 units/day)\"\n- Product P0018: \"Promo lift: -4.9% (672.8 vs 707.2 units/day)\"\n- Product P0007: \"Promo lift: -3.9% (682.5 vs 710.5 units/day)\"\n- Product P0012: \"Promo lift: -9.2% (670.4 vs 738.4 units/day)\"\n- Product P0016: \"Promo lift: -8.2% (693.6 vs 755.2 units/day)\"\n- Product P0019: \"Promo lift: -6.5% (679.5 vs 726.8 units/day)\"\n- Product P0020: \"Promo lift: -0.8% (694.3 vs 700.2 units/day)\"\n- Product P0004: \"Promo lift: -3.2% (677.3 vs 699.5 units/day)\"\n- Product P0005: \"Promo lift: -1.6% (688.7 vs 699.7 units/day)\""
+    },
+    {
+      "id": 24,
+      "group": "promo",
+      "question": "Does P0006 sell more units during promotions?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, Product P0006 does sell more units during promotions. The report states: \"Promo lift: +6.0% (681.6 vs 643.2 units/day)\". This indicates that during promotions, average daily sales are \"681.6\" units/day compared to \"643.2\" units/day without promotions."
+    },
+    {
+      "id": 25,
+      "group": "promo",
+      "question": "What is the promotion effectiveness of P0013?",
+      "score": 4,
+      "reason": "required keywords found but missing any-keyword bonus",
+      "answer": "Based on the provided document excerpts, the promotion effectiveness of P0013 is: \"Promo lift: -9.6% (682.6 vs 755.5 units/day)\"."
+    },
+    {
+      "id": 26,
+      "group": "volatility",
+      "question": "Which products have moderate sales volatility?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, all products listed have moderate sales volatility. The specific statements from each product's \"Sales summary\" section are:\n\n- Product P0005: \"Sales volatility: moderate (std dev: 232.3)\"\n- Product P0010: \"Sales volatility: moderate (std dev: 252.0)\"\n- Product P0007: \"Sales volatility: moderate (std dev: 246.8)\"\n- Product P0015: \"Sales volatility: moderate (std dev: 248.1)\"\n- Product P0019: \"Sales volatility: moderate (std dev: 244.2)\"\n- Product P0001: \"Sales volatility: moderate (std dev: 248.4)\"\n- Product P0002: \"Sales volatility: moderate (std dev: 229.4)\"\n- Product P0003: \"Sales volatility: moderate (std dev: 243.9)\"\n- Product P0009: \"Sales volatility: moderate (std dev: 245.7)\"\n- Product P0011: \"Sales volatility: moderate (std dev: 232.7)\"\n- Product P0020: \"Sales volatility: moderate (std dev: 241.2)\"\n- Product P0008: \"Sales volatility: moderate (std dev: 250.9)\"\n- Product P0014: \"Sales volatility: moderate (std dev: 242.9)\"\n- Product P0017: \"Sales volatility: moderate (std dev: 245.4)\"\n- Product P0012: \"Sales volatility: moderate (std dev: 248.4)\"\n- Product P0004: \"Sales volatility: moderate (std dev: 238.4)\"\n- Product P0006: \"Sales volatility: moderate (std dev: 243.6)\"\n- Product P0016: \"Sales volatility: moderate (std dev: 244.8)\"\n- Product P0013: \"Sales volatility: moderate (std dev: 252.0)\"\n- Product P0018: \"Sales volatility: moderate (std dev: 241.6)\"\n\nTherefore, all products mentioned—P0005, P0010, P0007, P0015, P0019, P0001, P0002, P0003, P0009, P0011, P0020, P0008, P0014, P0017, P0012, P0004, P0006, P0016, P0013, and P0018—have moderate sales volatility."
+    },
+    {
+      "id": 27,
+      "group": "volatility",
+      "question": "What is the sales volatility level of P0005?",
+      "score": 4,
+      "reason": "required keywords found but missing any-keyword bonus",
+      "answer": "Based on the provided document excerpts, the sales volatility level of product P0005 is \"moderate\"."
+    },
+    {
+      "id": 28,
+      "group": "volatility",
+      "question": "Which product has the most consistent (lowest std dev) daily sales?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the product with the most consistent (lowest std dev) daily sales is Product P0002 with a standard deviation of \"229.4\"."
+    },
+    {
+      "id": 29,
+      "group": "volatility",
+      "question": "What is the minimum sales day for P0012?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the minimum sales day for product P0012 is \"61 units\"."
+    },
+    {
+      "id": 30,
+      "group": "volatility",
+      "question": "What was the minimum sales day recorded for P0002?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "The minimum sales day recorded for P0002 was \"206 units\"."
+    },
+    {
+      "id": 31,
+      "group": "price",
+      "question": "Which product has the highest average price?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the product with the highest average price is **Product P0011** with an average price of \"50.89\"."
+    },
+    {
+      "id": 32,
+      "group": "price",
+      "question": "Which product has the lowest average price?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the product with the lowest average price is Product P0017 with an average price of \"48.50\"."
+    },
+    {
+      "id": 33,
+      "group": "price",
+      "question": "What is the average price for P0004?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the average price for product P0004 is \"50.16\"."
+    },
+    {
+      "id": 34,
+      "group": "price",
+      "question": "What is the average selling price of P0020?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the average selling price of product P0020 is \"50.09\"."
+    },
+    {
+      "id": 35,
+      "group": "price",
+      "question": "Is P0017 more or less expensive than P0011?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided excerpts, P0017 is less expensive than P0011.\n\nThe average price for P0011 is \"50.89\".\nThe average price for P0017 is \"48.50\"."
+    },
+    {
+      "id": 36,
+      "group": "category_top",
+      "question": "What are the top 3 products by volume in the Toys category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the top 3 products by volume in the Toys category are: \"P0011, P0019, P0020\"."
+    },
+    {
+      "id": 37,
+      "group": "category_top",
+      "question": "Which products lead the Electronics category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the products that lead the Electronics category are: \"P0007, P0016, P0020\". The document states: \"Top products by volume: P0007, P0016, P0020\"."
+    },
+    {
+      "id": 38,
+      "group": "category_top",
+      "question": "Who are the top sellers in the Clothing category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the top sellers in the Clothing category are: \"P0002, P0014, P0018\"."
+    },
+    {
+      "id": 39,
+      "group": "category_top",
+      "question": "Which products drive the most sales in Furniture?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the top products by volume in the Furniture category are: \"P0012, P0008, P0018\"."
+    },
+    {
+      "id": 40,
+      "group": "category_top",
+      "question": "What is the number of unique products in the Groceries category?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, the number of unique products in the Groceries category is \"20\"."
+    },
+    {
+      "id": 41,
+      "group": "dates",
+      "question": "What date range does the sales data cover?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "The sales data covers the date range \"2022-01-01 to 2024-01-01\" as stated in every product report excerpt."
+    },
+    {
+      "id": 42,
+      "group": "dates",
+      "question": "How many days of sales data are available for P0001?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "According to the provided document excerpts, the available sales data for Product P0001 covers the date range \"2022-01-01 to 2024-01-01,\" which is explicitly stated as \"731 days of data.\""
+    },
+    {
+      "id": 43,
+      "group": "dates",
+      "question": "When did P0012 reach its peak sales?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, Product P0012 reached its peak sales on **2023-09-10**. The excerpt states: \"Peak sales: 1,713 units (on 2023-09-10)\"."
+    },
+    {
+      "id": 44,
+      "group": "dates",
+      "question": "What was P0018's peak sales date and volume?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, Product P0018's peak sales date was \"2023-05-10\" and the peak sales volume was \"1,640 units\"."
+    },
+    {
+      "id": 45,
+      "group": "dates",
+      "question": "When did P0005 hit its peak sales day?",
+      "score": 5,
+      "reason": "all keywords found",
+      "answer": "Based on the provided document excerpts, Product P0005 hit its peak sales day on **2022-11-27**. The report states: \"Peak sales: 1,456 units (on 2022-11-27)\"."
+    },
+    {
+      "id": 46,
+      "group": "out_of_scope",
+      "question": "What will be the forecasted demand for P0001 next month?",
+      "score": 5,
+      "reason": "correctly declined (no info)",
+      "answer": "There is not enough information in the provided documents to answer this question."
+    },
+    {
+      "id": 47,
+      "group": "out_of_scope",
+      "question": "What is the weather forecast for next week?",
+      "score": 5,
+      "reason": "correctly declined (no info)",
+      "answer": "There is not enough information in the provided documents to answer this question."
+    },
+    {
+      "id": 48,
+      "group": "out_of_scope",
+      "question": "Which competitor has the best pricing strategy?",
+      "score": 5,
+      "reason": "correctly declined (no info)",
+      "answer": "There is not enough information in the provided documents to answer this question."
+    },
+    {
+      "id": 49,
+      "group": "out_of_scope",
+      "question": "What is the profit margin for P0005?",
+      "score": 5,
+      "reason": "correctly declined (no info)",
+      "answer": "There is not enough information in the provided documents to answer this question."
+    },
+    {
+      "id": 50,
+      "group": "out_of_scope",
+      "question": "Which new products should we launch next quarter?",
+      "score": 5,
+      "reason": "correctly declined (no info)",
+      "answer": "There is not enough information in the provided documents to answer this question."
+    }
+  ]
+}

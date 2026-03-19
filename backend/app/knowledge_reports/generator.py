@@ -127,7 +127,7 @@ Date range: {date_from} to {date_to} ({len(df)} days of data){cat_line}
 Sales summary:
 - Total sales: {total:,.0f} units
 - Average daily sales: {avg_daily:.1f} units/day
-- Peak sales: {max_day:.0f} units (on {peak_date})
+- Peak sales: {max_day:,.0f} units (on {peak_date})
 - Minimum sales day: {min_day:.0f} units
 - Sales volatility: {volatility} (std dev: {std_dev:.1f})
 

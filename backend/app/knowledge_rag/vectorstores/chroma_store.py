@@ -58,14 +58,24 @@ class ChromaVectorStore(VectorStore):
         where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         query_embedding = await self._embedding_provider.embed_query(query)
+        # Cap n_results to collection size to avoid ChromaDB errors
+        count = self._collection.count()
+        n_results = min(k, max(count, 1))
+
         query_kwargs: dict[str, Any] = {
             "query_embeddings": [query_embedding],
-            "n_results": k,
+            "n_results": n_results,
             "include": ["documents", "metadatas"],
         }
         if where:
             query_kwargs["where"] = where
-        result = self._collection.query(**query_kwargs)
+        try:
+            result = self._collection.query(**query_kwargs)
+        except Exception:
+            # Some Chroma versions raise when n_results > matching docs;
+            # retry with n_results=1 which is always safe.
+            query_kwargs["n_results"] = 1
+            result = self._collection.query(**query_kwargs)
         if not result or not result["documents"]:
             return []
         docs = result["documents"][0] or []
