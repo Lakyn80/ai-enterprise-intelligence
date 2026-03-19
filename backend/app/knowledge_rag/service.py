@@ -82,11 +82,29 @@ class KnowledgeService:
         ids = await self._store.add_documents(chunk_texts, chunk_metas)
         return {"status": "ok", "ingested": len(ids)}
 
+    @staticmethod
+    def _infer_where_filter(query: str) -> dict[str, Any] | None:
+        """
+        Return a ChromaDB `where` filter if the query clearly targets a specific report type.
+        Falls back to None (no filter = search all) when ambiguous.
+        """
+        q = query.lower()
+        category_keywords = {"categor", "categories", "segment", "department"}
+        product_keywords = {"product", "sku", "item", "p0"}
+        is_category = any(kw in q for kw in category_keywords)
+        is_product = any(kw in q for kw in product_keywords)
+        if is_category and not is_product:
+            return {"report_type": "category"}
+        if is_product and not is_category:
+            return {"report_type": "product"}
+        return None  # ambiguous — search everything
+
     async def query(self, query: str) -> dict[str, Any]:
         """Query RAG and return LLM-composed answer with citations."""
         if not self._store:
             return {"answer": "RAG is disabled.", "citations": []}
-        docs = await self._store.similarity_search(query, k=4)
+        where = self._infer_where_filter(query)
+        docs = await self._store.similarity_search(query, k=6, where=where)
         if not docs:
             return {"answer": "No relevant documents found.", "citations": []}
         context = "\n\n".join(d["content"] for d in docs)

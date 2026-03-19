@@ -53,17 +53,22 @@ class FAISSVectorStore(VectorStore):
         self,
         query: str,
         k: int = 4,
+        where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         if not self._documents or self._index is None:
             return []
         q_emb = await self._embedding_fn.embed_query(query)
         q_arr = np.array([q_emb], dtype=np.float32)
-        _, indices = self._index.search(q_arr, min(k, len(self._documents)))
+        # Fetch more candidates when filtering so we have enough after the where clause
+        fetch_k = min(len(self._documents), k * 4 if where else k)
+        _, indices = self._index.search(q_arr, fetch_k)
         results = []
         for idx in indices[0]:
             if 0 <= idx < len(self._documents):
-                results.append({
-                    "content": self._documents[idx],
-                    "metadata": self._metadatas[idx] if idx < len(self._metadatas) else {},
-                })
+                meta = self._metadatas[idx] if idx < len(self._metadatas) else {}
+                if where and not all(meta.get(key) == val for key, val in where.items()):
+                    continue
+                results.append({"content": self._documents[idx], "metadata": meta})
+                if len(results) == k:
+                    break
         return results

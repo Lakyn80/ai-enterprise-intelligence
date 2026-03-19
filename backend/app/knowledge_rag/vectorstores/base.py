@@ -22,6 +22,11 @@ class VectorStore(ABC):
         self,
         query: str,
         k: int = 4,
+        where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for similar documents. Returns list of {content, metadata}."""
+        """Search for similar documents. Returns list of {content, metadata}.
+
+        Args:
+            where: Optional metadata filter (ChromaDB-style), e.g. {"report_type": "category"}.
+        """
         ...

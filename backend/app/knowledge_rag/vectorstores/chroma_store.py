@@ -55,13 +55,17 @@ class ChromaVectorStore(VectorStore):
         self,
         query: str,
         k: int = 4,
+        where: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         query_embedding = await self._embedding_provider.embed_query(query)
-        result = self._collection.query(
-            query_embeddings=[query_embedding],
-            n_results=k,
-            include=["documents", "metadatas"],
-        )
+        query_kwargs: dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": k,
+            "include": ["documents", "metadatas"],
+        }
+        if where:
+            query_kwargs["where"] = where
+        result = self._collection.query(**query_kwargs)
         if not result or not result["documents"]:
             return []
         docs = result["documents"][0] or []
