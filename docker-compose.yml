@@ -11,8 +11,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: retail_forecast
-    ports:
-      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,8 +23,6 @@ services:
     image: redis:7-alpine
     networks:
       - app_net
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -34,13 +30,11 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/lakyn80/ai-enterprise-intelligence-backend:latest
     networks:
       - app_net
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/retail_forecast
       DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/retail_forecast
@@ -55,24 +49,18 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/scripts:/app/scripts
       - model_artifacts:/app/artifacts
       - chroma_data:/app/chroma_db
       - ./data:/data
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+    image: ghcr.io/lakyn80/ai-enterprise-intelligence-frontend:latest
     networks:
       - app_net
     ports:
-      - "3030:3000"
+      - "4000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
     env_file:
       - .env
     depends_on:
