@@ -175,7 +175,9 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/retail_foreca
 DATABASE_URL_SYNC=postgresql://postgres:postgres@localhost:5433/retail_forecast
 
 # === Redis ===
-REDIS_URL=redis://localhost:6379/0
+REDIS_URL=redis://localhost:6380/0
+REDIS_HOST_PORT=6380        # Docker host port for Redis; container still listens on 6379
+ASSISTANTS_CACHE_TTL=0        # 0 = preset Q&A stay in Redis until you delete them
 
 # === Security ===
 API_KEY_ADMIN=dev-admin-key-change-in-production
@@ -196,10 +198,15 @@ RAG_CHROMA_PATH=./chroma_db     # Host path; Docker uses /app/chroma_db
 LOG_LEVEL=INFO
 DEBUG=false
 ARTIFACTS_PATH=./artifacts      # Docker uses /app/artifacts
+
+# === Frontend ===
+NEXT_PUBLIC_API_URL=http://localhost:8001
 ```
 
 > **Docker note:** `DATABASE_URL` and `REDIS_URL` are overridden in `docker-compose.yml`
 > to use container hostnames (`postgres`, `redis`). The `.env` values are used for local dev.
+> Inside Docker Compose the backend still connects to `redis://redis:6379/0`; `6380` is only the host-side local dev port.
+> In `docker-compose.prod.yml`, Redis is published as host port `6380` by default (`REDIS_HOST_PORT`), because `6379` may already be occupied on the server.
 
 ---
 
@@ -223,25 +230,34 @@ docker compose ps
 # or: ./scripts/download_kaggle_data.sh  # Linux/Mac (requires kaggle CLI)
 
 # 5. Import data into PostgreSQL
-curl -X POST http://localhost:8000/api/admin/import-kaggle \
+curl -X POST http://localhost:8001/api/admin/import-kaggle \
   -H "X-Api-Key: dev-admin-key-change-in-production"
 
 # 6. Train the forecasting model
-curl -X POST http://localhost:8000/api/admin/train \
+curl -X POST http://localhost:8001/api/admin/train \
   -H "X-Api-Key: dev-admin-key-change-in-production"
 
 # 7. Ingest reports into Knowledge Assistant
-curl -X POST http://localhost:8000/api/knowledge/ingest-reports \
+curl -X POST http://localhost:8001/api/knowledge/ingest-reports \
   -H "X-Api-Key: dev-admin-key-change-in-production"
+
+# 8. Warm all 40 preset Q&A into Redis and translate demo locales
+docker compose run --rm cache-warmup
 ```
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:3030 |
-| Backend API | http://localhost:8000 |
-| API Docs (Swagger) | http://localhost:8000/docs |
-| PostgreSQL | localhost:5433 |
-| Redis | localhost:6379 |
+| Frontend | http://localhost:4000 |
+| Backend API | http://localhost:8001 |
+| API Docs (Swagger) | http://localhost:8001/docs |
+| PostgreSQL | internal container only |
+| Redis | internal container only |
+
+Preset cache notes:
+- `docker compose run --rm cache-warmup` fills all 20 `knowledge` + 20 `analyst` preset answers in English and translates them to `cs/sk/ru`.
+- Preset answers are stored in Redis without expiry by default (`ASSISTANTS_CACHE_TTL=0`).
+- Redis survives restart because both local and production compose files now persist `/data` in the `redis_data` Docker volume.
+- Data is deleted only by `docker compose down -v` or explicit cache flush.
 
 ---
 

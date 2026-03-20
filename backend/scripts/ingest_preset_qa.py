@@ -26,9 +26,12 @@ async def main(assistant_types: list[str], flush: bool, dry_run: bool) -> None:
     from app.assistants.presets import get_presets
     from app.assistants.cache import assistant_cache
     from app.settings import settings
+    import httpx
 
     print(f"RAG enabled: {settings.rag_enabled}")
     print(f"Redis URL:   {settings.redis_url}")
+    api_base = os.environ.get("INTERNAL_API_URL", "http://localhost:8000")
+    print(f"API base:    {api_base}")
 
     for atype in assistant_types:
         presets = get_presets(atype)  # type: ignore[arg-type]
@@ -46,44 +49,26 @@ async def main(assistant_types: list[str], flush: bool, dry_run: bool) -> None:
                 continue
 
             # Check cache first — skip if already warm
-            cached = await assistant_cache.get(atype, preset.id)
+            cached = await assistant_cache.get(atype, preset.id, locale="en")
             if cached:
                 print(f"    → already cached, skipping")
                 continue
 
             # Generate answer
             try:
-                if atype == "knowledge":
-                    from app.knowledge_rag.service import KnowledgeService
-                    svc = KnowledgeService()
-                    result = await svc.query(q)
-                    answer = result.get("answer", "")
-                    citations = result.get("citations", [])
-                    used_tools: list[str] = []
-                else:
-                    # Analyst: call the running API endpoint (needs live backend + DB)
-                    import httpx
-                    api_base = os.environ.get("INTERNAL_API_URL", "http://localhost:8000")
-                    url = f"{api_base}/api/assistants/ask-preset"
-                    async with httpx.AsyncClient(timeout=120) as http:
-                        resp = await http.post(url, json={
-                            "assistant_type": "analyst",
-                            "question_id": preset.id,
-                            "locale": "en",
-                        })
-                        resp.raise_for_status()
-                        data = resp.json()
-                    answer = data.get("answer", "")
-                    citations = data.get("citations", [])
-                    used_tools = data.get("used_tools", [])
-                    print(f"    → generated via API ({len(answer)} chars, tools: {used_tools})")
+                url = f"{api_base}/api/assistants/ask-preset"
+                async with httpx.AsyncClient(timeout=120) as http:
+                    resp = await http.post(url, json={
+                        "assistant_type": atype,
+                        "question_id": preset.id,
+                        "locale": "en",
+                    })
+                    resp.raise_for_status()
+                    data = resp.json()
 
-                await assistant_cache.set(
-                    atype,
-                    preset.id,
-                    {"answer": answer, "citations": citations, "used_tools": used_tools},
-                )
-                print(f"    → cached ({len(answer)} chars)")
+                answer = data.get("answer", "")
+                used_tools = data.get("used_tools", [])
+                print(f"    → cached via API ({len(answer)} chars, tools: {used_tools})")
 
             except Exception as exc:
                 print(f"    !! ERROR: {exc}")

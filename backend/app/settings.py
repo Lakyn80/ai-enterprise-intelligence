@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     database_url_sync: str = "postgresql://postgres:postgres@localhost:5433/retail_forecast"
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:6380/0"
+    assistants_cache_ttl: int = 0
 
     # Security
     api_key_admin: str = "dev-admin-key-change-in-production"

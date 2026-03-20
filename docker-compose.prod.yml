@@ -24,6 +24,11 @@ services:
     image: redis:7-alpine
     networks:
       - app_net
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 60 1 --appendonly yes
     # no external port — only accessible within app_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -72,3 +77,4 @@ volumes:
   postgres_data:
   model_artifacts:
   chroma_data:
+  redis_data:

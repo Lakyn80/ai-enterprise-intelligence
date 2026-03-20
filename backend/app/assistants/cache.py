@@ -7,7 +7,8 @@ Cache key schema:
           assistants:knowledge:k_001:cs
 
 One answer per question per locale is cached.
-TTL: 24 h by default, configurable via ASSISTANTS_CACHE_TTL env var.
+TTL: no expiry by default, configurable via ASSISTANTS_CACHE_TTL env var.
+Set ASSISTANTS_CACHE_TTL=0 to persist preset answers indefinitely.
 """
 
 import json
@@ -18,11 +19,18 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TTL = 60 * 60 * 24  # 24 hours
+_DEFAULT_TTL = 0
 
 
 def _get_ttl() -> int:
     return getattr(settings, "assistants_cache_ttl", _DEFAULT_TTL)
+
+
+def _build_set_kwargs(ttl: int | None = None) -> dict[str, int]:
+    resolved_ttl = _get_ttl() if ttl is None else ttl
+    if resolved_ttl <= 0:
+        return {}
+    return {"ex": resolved_ttl}
 
 
 def _make_key(assistant_type: str, question_id: str, locale: str = "en") -> str:
@@ -85,7 +93,7 @@ class AssistantCache:
             await client.set(
                 _make_key(assistant_type, question_id, locale),
                 json.dumps(payload, ensure_ascii=False),
-                ex=ttl or _get_ttl(),
+                **_build_set_kwargs(ttl),
             )
         except Exception as exc:
             logger.warning("Cache SET error: %s", exc)

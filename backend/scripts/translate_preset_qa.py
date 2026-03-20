@@ -13,6 +13,7 @@ Usage (inside Docker):
         python -m scripts.translate_preset_qa
 """
 
+import argparse
 import asyncio
 import json
 import os
@@ -45,10 +46,13 @@ async def translate_answer(answer: str, target_locale: str) -> str:
     return result.get("content", answer).strip()
 
 
-async def main() -> None:
+async def main(locales: list[str] | None = None) -> None:
     import redis.asyncio as aioredis
+    from app.assistants.cache import assistant_cache
     from app.settings import settings
     from app.assistants.presets import get_presets
+
+    target_locales = locales or LOCALES
 
     print(f"Redis: {settings.redis_url}")
     client = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
@@ -79,7 +83,7 @@ async def main() -> None:
             if en_raw:
                 en_payload = json.loads(en_raw)
                 # Migrate to new key
-                await client.set(new_en_key, en_raw, ex=60 * 60 * 24)
+                await assistant_cache.set(atype, qid, en_payload, locale="en")
                 await client.delete(old_key)
                 print(f"  EN: migrated from old key → {new_en_key}")
             else:
@@ -94,7 +98,7 @@ async def main() -> None:
         # ----------------------------------------------------------------
         # 2. Translate to each locale
         # ----------------------------------------------------------------
-        for locale in LOCALES:
+        for locale in target_locales:
             locale_key = f"assistants:{atype}:{qid}:{locale}"
             existing = await client.get(locale_key)
             if existing:
@@ -108,7 +112,7 @@ async def main() -> None:
                     "citations": en_payload.get("citations", []),
                     "used_tools": en_payload.get("used_tools", []),
                 }
-                await client.set(locale_key, json.dumps(payload, ensure_ascii=False), ex=60 * 60 * 24)
+                await assistant_cache.set(atype, qid, payload, locale=locale)
                 print(f"  {locale.upper()}: cached ({len(translated)} chars)")
             except Exception as exc:
                 print(f"  {locale.upper()}: ERROR — {exc}")
@@ -117,23 +121,26 @@ async def main() -> None:
 
     # Summary
     print("\n=== Cache summary ===")
-    for atype in ("knowledge", "analyst"):
-        for locale in ("en", "cs", "sk", "ru"):
-            pattern = f"assistants:{atype}:*:{locale}"
-            keys = await client.keys(pattern) if not client.is_closed else []
-            # reopen for keys check
-            pass
-
     client2 = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
     for atype in ("knowledge", "analyst"):
         counts = {}
-        for locale in ("en", "cs", "sk", "ru"):
+        for locale in ("en", *target_locales):
             keys = await client2.keys(f"assistants:{atype}:*:{locale}")
             counts[locale] = len(keys)
-        print(f"  {atype}: EN={counts['en']} CS={counts['cs']} SK={counts['sk']} RU={counts['ru']}")
+        summary = " ".join(f"{locale.upper()}={counts[locale]}" for locale in ("en", *target_locales))
+        print(f"  {atype}: {summary}")
     await client2.aclose()
+    await assistant_cache.close()
     print("\nDone.")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Translate preset cache answers to target locales")
+    parser.add_argument(
+        "--locales",
+        default="cs,sk,ru",
+        help="Comma-separated non-EN locales to translate (default: cs,sk,ru)",
+    )
+    args = parser.parse_args()
+    locales = [locale.strip() for locale in args.locales.split(",") if locale.strip()]
+    asyncio.run(main(locales))

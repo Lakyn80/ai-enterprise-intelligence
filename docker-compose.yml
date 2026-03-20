@@ -33,7 +33,10 @@ services:
       retries: 5
 
   backend:
-    image: ghcr.io/lakyn80/ai-enterprise-intelligence-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ai-enterprise-intelligence-backend:local
     networks:
       - app_net
     ports:
@@ -51,23 +54,59 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 12
     volumes:
       - model_artifacts:/app/artifacts
       - chroma_data:/app/chroma_db
       - ./data:/data
 
   frontend:
-    image: ghcr.io/lakyn80/ai-enterprise-intelligence-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8001
+    image: ai-enterprise-intelligence-frontend:local
     networks:
       - app_net
     ports:
       - "4000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+      NEXT_PUBLIC_API_URL: http://localhost:8001
     env_file:
       - .env
     depends_on:
       - backend
+
+  cache-warmup:
+    image: ai-enterprise-intelligence-backend:local
+    profiles:
+      - tools
+    networks:
+      - app_net
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/retail_forecast
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/retail_forecast
+      REDIS_URL: redis://redis:6379/0
+      INTERNAL_API_URL: http://backend:8000
+      artifacts_path: /app/artifacts
+      RAG_CHROMA_PATH: /app/chroma_db
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: python -m scripts.warm_preset_cache
+    volumes:
+      - model_artifacts:/app/artifacts
+      - chroma_data:/app/chroma_db
+      - ./data:/data
 
 volumes:
   postgres_data:
