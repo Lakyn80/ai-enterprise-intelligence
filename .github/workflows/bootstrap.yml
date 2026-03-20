@@ -1,0 +1,107 @@
+name: Bootstrap Server Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      train_model:
+        description: Train forecasting model
+        required: true
+        default: true
+        type: boolean
+      ingest_reports:
+        description: Ingest knowledge reports into RAG
+        required: true
+        default: true
+        type: boolean
+      warm_preset_cache:
+        description: Warm all preset assistant answers
+        required: true
+        default: true
+        type: boolean
+      flush_preset_cache:
+        description: Flush preset cache before warmup
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bootstrap-main
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'production' }}
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      APP_DIR: /home/${{ secrets.SERVER_USER || vars.SERVER_USER }}/projects/apps/ai-enterprise-intelligence
+      TRAIN_MODEL: ${{ inputs.train_model }}
+      INGEST_REPORTS: ${{ inputs.ingest_reports }}
+      WARM_PRESET_CACHE: ${{ inputs.warm_preset_cache }}
+      FLUSH_PRESET_CACHE: ${{ inputs.flush_preset_cache }}
+
+    steps:
+      - name: Validate bootstrap secrets
+        shell: bash
+        run: |
+          test -n "$SERVER_HOST" || { echo "Missing SERVER_HOST secret/variable"; exit 1; }
+          test -n "$SERVER_USER" || { echo "Missing SERVER_USER secret/variable"; exit 1; }
+          test -n "$SERVER_SSH_KEY" || { echo "Missing SERVER_SSH_KEY secret"; exit 1; }
+
+      - name: Checkout deploy files
+        uses: actions/checkout@v4
+
+      - name: Prepare server app directory
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            mkdir -p "${{ env.APP_DIR }}"
+            mkdir -p "${{ env.APP_DIR }}/data"
+
+      - name: Upload production compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
+          source: docker-compose.prod.yml
+          target: ${{ env.APP_DIR }}
+
+      - name: Bootstrap via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
+          command_timeout: 90m
+          script: |
+            cd "${{ env.APP_DIR }}"
+            test -f docker-compose.prod.yml
+            test -f .env || { echo "Missing .env on server in $PWD"; exit 1; }
+            docker compose -f docker-compose.prod.yml up -d
+            sleep 10
+            API_KEY_ADMIN=$(docker compose -f docker-compose.prod.yml exec -T backend printenv API_KEY_ADMIN | tr -d '\r')
+            test -n "$API_KEY_ADMIN" || { echo "Missing API_KEY_ADMIN in backend container"; exit 1; }
+            docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
+            if [ "$TRAIN_MODEL" = "true" ]; then
+              curl -fsS -X POST http://localhost:8001/api/admin/train -H "X-Api-Key: $API_KEY_ADMIN"
+            fi
+            if [ "$INGEST_REPORTS" = "true" ]; then
+              curl -fsS -X POST http://localhost:8001/api/knowledge/ingest-reports -H "X-Api-Key: $API_KEY_ADMIN"
+            fi
+            if [ "$WARM_PRESET_CACHE" = "true" ]; then
+              if [ "$FLUSH_PRESET_CACHE" = "true" ]; then
+                docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.warm_preset_cache --flush
+              else
+                docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.warm_preset_cache
+              fi
+            fi

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6380/0"
     assistants_cache_ttl: int = 0
+    assistants_semantic_cache_enabled: bool = True
+    assistants_semantic_cache_collection_name: str = "assistants_query_cache"
+    assistants_semantic_cache_max_distance: float = 0.12
+    assistants_semantic_cache_top_k: int = 3
 
     # Security
     api_key_admin: str = "dev-admin-key-change-in-production"

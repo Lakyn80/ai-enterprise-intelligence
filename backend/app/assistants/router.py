@@ -121,7 +121,7 @@ async def ask_custom(
     response: Response = None,
 ):
     """
-    Answer a free-form question (no preset cache).
+    Answer a free-form question with exact + semantic cache.
 
     Idempotency-Key prevents duplicate LLM calls on client retries.
     """
@@ -185,8 +185,17 @@ async def get_status(assistant_type: AssistantType):
 @router.delete("/{assistant_type}/cache")
 async def flush_cache(assistant_type: AssistantType):
     from app.assistants.cache import assistant_cache
-    deleted = await assistant_cache.flush_assistant(assistant_type)
-    return {"deleted": deleted, "assistant_type": assistant_type}
+    from app.assistants.query_cache import assistant_query_cache
+
+    preset_deleted = await assistant_cache.flush_assistant(assistant_type)
+    custom_deleted = await assistant_query_cache.flush_assistant(assistant_type)
+    return {
+        "deleted": preset_deleted + custom_deleted["redis_deleted"] + custom_deleted["semantic_deleted"],
+        "assistant_type": assistant_type,
+        "preset_deleted": preset_deleted,
+        "custom_exact_deleted": custom_deleted["redis_deleted"],
+        "custom_semantic_deleted": custom_deleted["semantic_deleted"],
+    }
 
 
 # ---------------------------------------------------------------------------

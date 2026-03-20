@@ -205,7 +205,12 @@ async def test_ask_preset_raises_for_unknown_id():
 
 @pytest.mark.asyncio
 async def test_ask_custom_no_cache():
-    with patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_query_cache.get_exact = AsyncMock(return_value=None)
+        mock_query_cache.get_semantic = AsyncMock(return_value=None)
+        mock_query_cache.set_exact = AsyncMock()
+        mock_query_cache.set_semantic = AsyncMock()
         mock_gen.return_value = ("custom answer", [{"source": "s"}], ["tool_x"])
         result = await ask_custom("analyst", "what is revenue?", "sk")
 
@@ -214,3 +219,44 @@ async def test_ask_custom_no_cache():
     assert result.answer == "custom answer"
     assert result.locale == "sk"
     assert result.used_tools == ["tool_x"]
+    mock_query_cache.set_exact.assert_called_once()
+    mock_query_cache.set_semantic.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_exact_cached_answer():
+    cached_payload = {
+        "answer": "cached custom",
+        "citations": [{"source": "doc.txt"}],
+        "used_tools": ["tool_x"],
+    }
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache:
+        mock_query_cache.get_exact = AsyncMock(return_value=cached_payload)
+
+        result = await ask_custom("knowledge", "what is revenue?", "en")
+
+    assert result.cached is True
+    assert result.answer == "cached custom"
+    assert result.used_tools == ["tool_x"]
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_semantic_cached_answer():
+    cached_payload = {
+        "answer": "semantic custom",
+        "citations": [{"source": "doc.txt"}],
+        "used_tools": [],
+    }
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_query_cache.get_exact = AsyncMock(return_value=None)
+        mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
+        mock_query_cache.set_exact = AsyncMock()
+        mock_gen.return_value = ("fresh answer", [], [])
+
+        result = await ask_custom("knowledge", "what is revenue?", "en")
+
+    assert result.cached is True
+    assert result.answer == "semantic custom"
+    mock_gen.assert_not_called()
+    mock_query_cache.set_exact.assert_called_once_with("knowledge", "what is revenue?", "en", cached_payload)

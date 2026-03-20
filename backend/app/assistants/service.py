@@ -14,6 +14,7 @@ from typing import Any
 
 from app.assistants.cache import assistant_cache
 from app.assistants.dlq import dlq
+from app.assistants.query_cache import assistant_query_cache
 from app.assistants.presets import AssistantType, Locale, get_preset_by_id, get_presets
 from app.assistants.retry import build_retry
 from app.assistants.schemas import AssistantAnswer, Citation, PresetQuestionOut
@@ -260,9 +261,45 @@ async def ask_custom(
     forecasting_service: Any = None,
     forecasting_repo: Any = None,
 ) -> AssistantAnswer:
+    exact_cached = await assistant_query_cache.get_exact(assistant_type, query, locale)
+    if exact_cached:
+        logger.info(
+            "assistants | type=%s locale=%s status=custom_exact_cache_hit",
+            assistant_type, locale,
+        )
+        return AssistantAnswer(
+            question_id=None,
+            query=query,
+            answer=exact_cached["answer"],
+            locale=locale,
+            cached=True,
+            citations=[Citation(**c) for c in _normalise_citations(exact_cached.get("citations", []))],
+            used_tools=exact_cached.get("used_tools", []),
+        )
+
+    semantic_cached = await assistant_query_cache.get_semantic(assistant_type, query, locale)
+    if semantic_cached:
+        logger.info(
+            "assistants | type=%s locale=%s status=custom_semantic_cache_hit",
+            assistant_type, locale,
+        )
+        await assistant_query_cache.set_exact(assistant_type, query, locale, semantic_cached)
+        return AssistantAnswer(
+            question_id=None,
+            query=query,
+            answer=semantic_cached["answer"],
+            locale=locale,
+            cached=True,
+            citations=[Citation(**c) for c in _normalise_citations(semantic_cached.get("citations", []))],
+            used_tools=semantic_cached.get("used_tools", []),
+        )
+
     answer, citations_raw, used_tools = await _generate(
         assistant_type, query, forecasting_service, forecasting_repo
     )
+    payload = {"answer": answer, "citations": citations_raw, "used_tools": used_tools}
+    await assistant_query_cache.set_exact(assistant_type, query, locale, payload)
+    await assistant_query_cache.set_semantic(assistant_type, query, locale, payload)
     return AssistantAnswer(
         question_id=None,
         query=query,
