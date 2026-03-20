@@ -73,7 +73,7 @@ jobs:
             test -f docker-compose.prod.yml
             test -f .env || { echo "Missing .env on server in $PWD"; exit 1; }
             docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
             sleep 10
             docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
             docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.warm_preset_cache
