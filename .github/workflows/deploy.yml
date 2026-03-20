@@ -75,5 +75,9 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
             sleep 10
+            API_KEY_ADMIN=$(docker compose -f docker-compose.prod.yml exec -T backend printenv API_KEY_ADMIN | tr -d '\r')
+            test -n "$API_KEY_ADMIN" || { echo "Missing API_KEY_ADMIN in backend container"; exit 1; }
             docker compose -f docker-compose.prod.yml exec -T backend alembic upgrade head
-            docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.warm_preset_cache
+            curl -fsS -X POST http://localhost:8001/api/admin/train -H "X-Api-Key: $API_KEY_ADMIN"
+            curl -fsS -X POST http://localhost:8001/api/knowledge/ingest-reports -H "X-Api-Key: $API_KEY_ADMIN"
+            docker compose -f docker-compose.prod.yml exec -T backend python -m scripts.warm_preset_cache --flush
