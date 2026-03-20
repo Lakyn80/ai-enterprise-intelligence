@@ -43,6 +43,10 @@ jobs:
           key: ${{ env.SERVER_SSH_KEY }}
           script: |
             cd ~/projects/apps/ai-enterprise-intelligence
+            git fetch --all --prune
+            git checkout main
+            git pull --ff-only origin main
+            test -f docker-compose.prod.yml
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
             sleep 10
