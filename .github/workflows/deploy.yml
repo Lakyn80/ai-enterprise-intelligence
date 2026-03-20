@@ -21,6 +21,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST || vars.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER || vars.SERVER_USER }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
 
     steps:
       - name: Wait for backend image build for same commit
@@ -65,12 +69,19 @@ jobs:
               `Timed out waiting for backend workflow success for ${headSha}.`,
             );
 
+      - name: Validate deploy secrets
+        shell: bash
+        run: |
+          test -n "$SERVER_HOST" || { echo "Missing SERVER_HOST secret/variable"; exit 1; }
+          test -n "$SERVER_USER" || { echo "Missing SERVER_USER secret/variable"; exit 1; }
+          test -n "$SERVER_SSH_KEY" || { echo "Missing SERVER_SSH_KEY secret"; exit 1; }
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
           script: |
             cd ~/projects/apps/ai-enterprise-intelligence
             docker compose -f docker-compose.prod.yml pull
