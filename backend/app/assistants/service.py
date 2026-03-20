@@ -9,6 +9,7 @@ Status of every preset question is tracked in Redis.
 from __future__ import annotations
 
 import logging
+import json
 import time
 from typing import Any
 
@@ -18,6 +19,7 @@ from app.assistants.query_cache import assistant_query_cache
 from app.assistants.presets import AssistantType, Locale, get_preset_by_id, get_presets
 from app.assistants.retry import build_retry
 from app.assistants.schemas import AssistantAnswer, Citation, PresetQuestionOut
+from app.assistants.semantic_policy import decide_semantic_cache_strategy
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -26,7 +28,6 @@ logger = logging.getLogger(__name__)
 # Status tracking helpers (Redis key: assistants:status:{type}:{id})
 # ---------------------------------------------------------------------------
 
-import json
 from datetime import datetime, timezone
 
 
@@ -137,6 +138,53 @@ async def _call_analyst(
             )
 
     return result  # (answer, used_tools, citations)
+
+
+async def _call_semantic_rewrite(
+    assistant_type: AssistantType,
+    query: str,
+    cached_query: str,
+    cached_payload: dict[str, Any],
+) -> str | None:
+    """Cheap LLM adaptation using the nearest cached answer as context."""
+    from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
+
+    provider = DeepSeekProvider()
+    citations_json = json.dumps(cached_payload.get("citations", []), ensure_ascii=False)
+    used_tools_json = json.dumps(cached_payload.get("used_tools", []), ensure_ascii=False)
+
+    async for attempt in build_retry():
+        with attempt:
+            result = await provider.generate([
+                {
+                    "role": "system",
+                    "content": (
+                        "You adapt a cached assistant answer to a new, similar user question. "
+                        "Use only the information present in the cached answer, citations, and tool list. "
+                        "If the cached answer is not sufficient to answer the new question safely, "
+                        "reply with exactly __CACHE_MISS__. "
+                        "Keep the final answer in the same language as the new user question. "
+                        "Do not invent numbers, entities, tools, or facts."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Assistant type: {assistant_type}\n"
+                        f"New question: {query}\n"
+                        f"Nearest cached question: {cached_query}\n"
+                        f"Cached answer:\n{cached_payload.get('answer', '')}\n\n"
+                        f"Citations JSON: {citations_json}\n"
+                        f"Used tools JSON: {used_tools_json}\n\n"
+                        "Return only the final answer text or __CACHE_MISS__."
+                    ),
+                },
+            ])
+
+    answer = (result.get("content") or "").strip()
+    if not answer or answer == "__CACHE_MISS__":
+        return None
+    return answer
 
 
 # ---------------------------------------------------------------------------
@@ -279,36 +327,56 @@ async def ask_custom(
 
     semantic_cached = await assistant_query_cache.get_semantic(assistant_type, query, locale)
     if semantic_cached:
-        logger.info(
-            "assistants | type=%s locale=%s status=custom_semantic_cache_hit",
-            assistant_type, locale,
+        cached_payload = _cache_payload_from_entry(semantic_cached)
+        decision = decide_semantic_cache_strategy(
+            similarity=float(semantic_cached.get("similarity", 0.0)),
+            reuse_similarity=settings.assistants_semantic_cache_reuse_similarity,
+            rewrite_similarity=settings.assistants_semantic_cache_rewrite_similarity,
         )
-        await assistant_query_cache.set_exact(assistant_type, query, locale, semantic_cached)
-        return AssistantAnswer(
-            question_id=None,
-            query=query,
-            answer=semantic_cached["answer"],
-            locale=locale,
-            cached=True,
-            citations=[Citation(**c) for c in _normalise_citations(semantic_cached.get("citations", []))],
-            used_tools=semantic_cached.get("used_tools", []),
+
+        if decision.strategy == "reuse":
+            logger.info(
+                "assistants | type=%s locale=%s status=custom_semantic_cache_hit similarity=%.3f",
+                assistant_type, locale, decision.similarity,
+            )
+            await assistant_query_cache.set_exact(assistant_type, query, locale, cached_payload)
+            return _build_custom_answer(query, locale, cached_payload, cached=True)
+
+        if decision.strategy == "rewrite":
+            logger.info(
+                "assistants | type=%s locale=%s status=custom_semantic_rewrite similarity=%.3f",
+                assistant_type, locale, decision.similarity,
+            )
+            rewritten_answer = await _call_semantic_rewrite(
+                assistant_type=assistant_type,
+                query=query,
+                cached_query=str(semantic_cached.get("cached_query", "")),
+                cached_payload=cached_payload,
+            )
+            if rewritten_answer:
+                payload = _cache_payload(
+                    answer=rewritten_answer,
+                    citations=cached_payload.get("citations", []),
+                    used_tools=cached_payload.get("used_tools", []),
+                )
+                await assistant_query_cache.set_exact(assistant_type, query, locale, payload)
+                await assistant_query_cache.set_semantic(assistant_type, query, locale, payload)
+                return _build_custom_answer(query, locale, payload, cached=False)
+
+        logger.info(
+            "assistants | type=%s locale=%s status=custom_semantic_miss similarity=%.3f",
+            assistant_type,
+            locale,
+            decision.similarity,
         )
 
     answer, citations_raw, used_tools = await _generate(
         assistant_type, query, forecasting_service, forecasting_repo
     )
-    payload = {"answer": answer, "citations": citations_raw, "used_tools": used_tools}
+    payload = _cache_payload(answer=answer, citations=citations_raw, used_tools=used_tools)
     await assistant_query_cache.set_exact(assistant_type, query, locale, payload)
     await assistant_query_cache.set_semantic(assistant_type, query, locale, payload)
-    return AssistantAnswer(
-        question_id=None,
-        query=query,
-        answer=answer,
-        locale=locale,
-        cached=False,
-        citations=[Citation(**c) for c in citations_raw],
-        used_tools=used_tools,
-    )
+    return _build_custom_answer(query, locale, payload, cached=False)
 
 
 # ---------------------------------------------------------------------------
@@ -324,3 +392,36 @@ def _normalise_citations(raw: list[Any]) -> list[dict]:
                 c = {"source": c["document_id"], "excerpt": c.get("chunk", "")}
             out.append(c)
     return out
+
+
+def _cache_payload(answer: str, citations: list[dict], used_tools: list[str]) -> dict[str, Any]:
+    return {
+        "answer": answer,
+        "citations": citations,
+        "used_tools": used_tools,
+    }
+
+
+def _cache_payload_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    return _cache_payload(
+        answer=entry.get("answer", ""),
+        citations=_normalise_citations(entry.get("citations", [])),
+        used_tools=entry.get("used_tools", []),
+    )
+
+
+def _build_custom_answer(
+    query: str,
+    locale: Locale,
+    payload: dict[str, Any],
+    cached: bool,
+) -> AssistantAnswer:
+    return AssistantAnswer(
+        question_id=None,
+        query=query,
+        answer=payload["answer"],
+        locale=locale,
+        cached=cached,
+        citations=[Citation(**c) for c in _normalise_citations(payload.get("citations", []))],
+        used_tools=payload.get("used_tools", []),
+    )

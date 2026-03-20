@@ -125,10 +125,7 @@ class AssistantQueryCache:
         for metadata, distance in zip(metadatas, distances):
             if not metadata:
                 continue
-            cached_normalised = str(metadata.get("normalised_query", "")).strip()
-            if cached_normalised != normalised and float(distance or 1.0) > settings.assistants_semantic_cache_max_distance:
-                continue
-            return self._payload_from_metadata(metadata)
+            return self._semantic_candidate_from_metadata(metadata, distance, normalised)
 
         return None
 
@@ -229,6 +226,26 @@ class AssistantQueryCache:
             "citations": json.loads(metadata.get("citations_json", "[]")),
             "used_tools": json.loads(metadata.get("used_tools_json", "[]")),
         }
+
+    @classmethod
+    def _semantic_candidate_from_metadata(
+        cls,
+        metadata: dict[str, Any],
+        distance: Any,
+        normalised_query: str,
+    ) -> dict[str, Any]:
+        cached_normalised = str(metadata.get("normalised_query", "")).strip()
+        exact_normalised_match = cached_normalised == normalised_query
+        resolved_distance = float(distance or 1.0)
+        similarity = 1.0 if exact_normalised_match else max(0.0, 1.0 - resolved_distance)
+        payload = cls._payload_from_metadata(metadata)
+        payload.update({
+            "cached_query": metadata.get("query", ""),
+            "similarity": similarity,
+            "distance": resolved_distance,
+            "exact_normalised_match": exact_normalised_match,
+        })
+        return payload
 
 
 assistant_query_cache = AssistantQueryCache()

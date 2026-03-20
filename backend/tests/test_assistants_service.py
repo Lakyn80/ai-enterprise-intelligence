@@ -246,6 +246,8 @@ async def test_ask_custom_returns_semantic_cached_answer():
         "answer": "semantic custom",
         "citations": [{"source": "doc.txt"}],
         "used_tools": [],
+        "similarity": 0.97,
+        "cached_query": "what is revenue?",
     }
     with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
@@ -259,4 +261,43 @@ async def test_ask_custom_returns_semantic_cached_answer():
     assert result.cached is True
     assert result.answer == "semantic custom"
     mock_gen.assert_not_called()
-    mock_query_cache.set_exact.assert_called_once_with("knowledge", "what is revenue?", "en", cached_payload)
+    mock_query_cache.set_exact.assert_called_once_with(
+        "knowledge",
+        "what is revenue?",
+        "en",
+        {
+            "answer": "semantic custom",
+            "citations": [{"source": "doc.txt"}],
+            "used_tools": [],
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_rewrites_mid_similarity_cached_answer():
+    cached_payload = {
+        "answer": "cached base answer",
+        "citations": [{"source": "doc.txt"}],
+        "used_tools": ["tool_x"],
+        "similarity": 0.62,
+        "cached_query": "what is revenue?",
+    }
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._call_semantic_rewrite", new_callable=AsyncMock) as mock_rewrite, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
+         patch("app.assistants.service.settings.assistants_semantic_cache_reuse_similarity", 0.90), \
+         patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_similarity", 0.30):
+        mock_query_cache.get_exact = AsyncMock(return_value=None)
+        mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
+        mock_query_cache.set_exact = AsyncMock()
+        mock_query_cache.set_semantic = AsyncMock()
+        mock_rewrite.return_value = "rewritten answer"
+
+        result = await ask_custom("knowledge", "show me revenue", "en")
+
+    assert result.cached is False
+    assert result.answer == "rewritten answer"
+    mock_rewrite.assert_awaited_once()
+    mock_gen.assert_not_called()
+    mock_query_cache.set_exact.assert_called_once()
+    mock_query_cache.set_semantic.assert_called_once()

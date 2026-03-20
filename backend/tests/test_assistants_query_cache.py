@@ -36,6 +36,10 @@ async def test_get_semantic_prefers_same_normalised_query_even_with_higher_dista
         "answer": "cached answer",
         "citations": [{"source": "doc.txt"}],
         "used_tools": ["tool_x"],
+        "cached_query": "",
+        "similarity": 1.0,
+        "distance": 0.9,
+        "exact_normalised_match": True,
     }
 
 
@@ -58,11 +62,12 @@ async def test_get_semantic_returns_match_within_distance_threshold():
 
     with patch.object(cache, "_get_collection", AsyncMock(return_value=collection)), \
          patch.object(cache, "_get_embedding_provider", return_value=provider), \
-         patch("app.assistants.query_cache.settings.assistants_semantic_cache_max_distance", 0.12):
+         patch("app.assistants.query_cache.settings.assistants_semantic_cache_reuse_similarity", 0.90):
         result = await cache.get_semantic("knowledge", "Which product gains the most from promotions?", "en")
 
     assert result is not None
     assert result["answer"] == "cached answer"
+    assert result["similarity"] == pytest.approx(0.95)
 
 
 @pytest.mark.asyncio
