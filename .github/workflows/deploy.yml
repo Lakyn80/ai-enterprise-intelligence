@@ -47,6 +47,7 @@ jobs:
           host: ${{ env.SERVER_HOST }}
           username: ${{ env.SERVER_USER }}
           key: ${{ env.SERVER_SSH_KEY }}
+          command_timeout: 30m
           script: |
             mkdir -p "${{ env.APP_DIR }}"
             mkdir -p "${{ env.APP_DIR }}/data"
@@ -66,6 +67,7 @@ jobs:
           host: ${{ env.SERVER_HOST }}
           username: ${{ env.SERVER_USER }}
           key: ${{ env.SERVER_SSH_KEY }}
+          command_timeout: 90m
           script: |
             cd "${{ env.APP_DIR }}"
             test -f docker-compose.prod.yml
