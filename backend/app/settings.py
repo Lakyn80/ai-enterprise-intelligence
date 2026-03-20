@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     assistants_semantic_cache_collection_name: str = "assistants_query_cache"
     assistants_semantic_cache_reuse_similarity: float = 0.90
     assistants_semantic_cache_rewrite_similarity: float = 0.30
+    assistants_semantic_cache_rewrite_enabled: bool = False
     assistants_semantic_cache_top_k: int = 3
+    llm_temperature: float = 0.0
 
     # Security
     api_key_admin: str = "dev-admin-key-change-in-production"

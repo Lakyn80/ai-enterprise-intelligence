@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import json
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.assistants.cache import assistant_cache
 from app.assistants.dlq import dlq
@@ -21,6 +21,9 @@ from app.assistants.retry import build_retry
 from app.assistants.schemas import AssistantAnswer, Citation, PresetQuestionOut
 from app.assistants.semantic_policy import decide_semantic_cache_strategy
 from app.settings import settings
+
+if TYPE_CHECKING:
+    from app.assistants.trace_recorder import AssistantTraceRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -99,14 +102,17 @@ def list_presets(assistant_type: AssistantType, locale: Locale) -> list[PresetQu
 # ---------------------------------------------------------------------------
 
 
-async def _call_knowledge(query: str) -> tuple[str, list[dict]]:
+async def _call_knowledge(
+    query: str,
+    trace: "AssistantTraceRecorder | None" = None,
+) -> tuple[str, list[dict]]:
     """RAG query with retry. Raises on final failure."""
     from app.knowledge_rag.service import KnowledgeService
     svc = KnowledgeService()
 
     async for attempt in build_retry():
         with attempt:
-            result = await svc.query(query)
+            result = await svc.query(query, trace=trace)
 
     return result.get("answer", ""), result.get("citations", [])
 
@@ -115,6 +121,7 @@ async def _call_analyst(
     query: str,
     forecasting_service: Any,
     forecasting_repo: Any,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> tuple[str, list[str], list[dict]]:
     """LangGraph agent call with retry. Raises on final failure."""
     from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
@@ -135,6 +142,7 @@ async def _call_analyst(
                 forecasting_repo=forecasting_repo,
                 knowledge_service=knowledge_service,
                 rag_enabled=settings.rag_enabled,
+                trace=trace,
             )
 
     return result  # (answer, used_tools, citations)
@@ -145,6 +153,7 @@ async def _call_semantic_rewrite(
     query: str,
     cached_query: str,
     cached_payload: dict[str, Any],
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> str | None:
     """Cheap LLM adaptation using the nearest cached answer as context."""
     from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
@@ -155,7 +164,7 @@ async def _call_semantic_rewrite(
 
     async for attempt in build_retry():
         with attempt:
-            result = await provider.generate([
+            messages = [
                 {
                     "role": "system",
                     "content": (
@@ -179,9 +188,20 @@ async def _call_semantic_rewrite(
                         "Return only the final answer text or __CACHE_MISS__."
                     ),
                 },
-            ])
+            ]
+            if trace:
+                trace.add_step(
+                    "semantic_rewrite_request",
+                    {"messages": messages},
+                )
+            result = await provider.generate(messages)
 
     answer = (result.get("content") or "").strip()
+    if trace:
+        trace.add_step(
+            "semantic_rewrite_response",
+            {"content": answer, "tool_calls": result.get("tool_calls", [])},
+        )
     if not answer or answer == "__CACHE_MISS__":
         return None
     return answer
@@ -198,6 +218,7 @@ async def _generate(
     forecasting_service: Any,
     forecasting_repo: Any,
     question_id: str | None = None,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> tuple[str, list[dict], list[str]]:
     """
     Returns (answer, citations, used_tools).
@@ -205,12 +226,21 @@ async def _generate(
     """
     t0 = time.monotonic()
     try:
+        if trace:
+            trace.add_step(
+                "generation_dispatch",
+                {
+                    "assistant_type": assistant_type,
+                    "question_id": question_id,
+                    "query": query,
+                },
+            )
         if assistant_type == "knowledge":
-            answer, citations = await _call_knowledge(query)
+            answer, citations = await _call_knowledge(query, trace=trace)
             used_tools: list[str] = []
         else:
             answer, used_tools, citations = await _call_analyst(
-                query, forecasting_service, forecasting_repo
+                query, forecasting_service, forecasting_repo, trace=trace
             )
 
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -221,6 +251,16 @@ async def _generate(
         )
         if question_id:
             await _set_status(assistant_type, question_id, "ok", latency_ms)
+        if trace:
+            trace.add_step(
+                "generation_complete",
+                {
+                    "answer": answer,
+                    "citations": citations,
+                    "used_tools": used_tools,
+                },
+                latency_ms=latency_ms,
+            )
 
         return answer, _normalise_citations(citations), used_tools
 
@@ -233,6 +273,13 @@ async def _generate(
         if question_id:
             await _set_status(assistant_type, question_id, "error",
                               latency_ms, error=str(exc)[:200])
+        if trace:
+            trace.add_step(
+                "generation_error",
+                {"error": str(exc)},
+                status="error",
+                latency_ms=latency_ms,
+            )
         await dlq.push(
             assistant_type=assistant_type,
             query=query,
@@ -254,20 +301,45 @@ async def ask_preset(
     locale: Locale,
     forecasting_service: Any = None,
     forecasting_repo: Any = None,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> AssistantAnswer:
     preset = get_preset_by_id(assistant_type, question_id)
     if preset is None:
         raise ValueError(f"Unknown question_id '{question_id}' for assistant '{assistant_type}'")
 
     query_en = preset.query_en
+    if trace:
+        trace.add_step(
+            "preset_selected",
+            {
+                "question_id": question_id,
+                "locale": locale,
+                "localized_query": preset.text(locale),
+                "query_en": query_en,
+            },
+        )
 
     # 1. Cache check (locale-aware)
     cached = await assistant_cache.get(assistant_type, question_id, locale)
+    if trace:
+        trace.add_step(
+            "preset_cache_lookup",
+            {
+                "assistant_type": assistant_type,
+                "question_id": question_id,
+                "locale": locale,
+                "hit": bool(cached),
+            },
+        )
     if cached:
         logger.info(
             "assistants | type=%s qid=%s locale=%s status=cache_hit",
             assistant_type, question_id, locale,
         )
+        if trace:
+            trace.cache_source = "preset_cache"
+            trace.cache_strategy = "preset_cache_hit"
+            trace.cached = True
         return AssistantAnswer(
             question_id=question_id,
             query=preset.text(locale),
@@ -280,7 +352,7 @@ async def ask_preset(
 
     # 2. Generate (with retry inside _generate)
     answer, citations_raw, used_tools = await _generate(
-        assistant_type, query_en, forecasting_service, forecasting_repo, question_id
+        assistant_type, query_en, forecasting_service, forecasting_repo, question_id, trace=trace
     )
 
     # 3. Store in cache (locale-aware)
@@ -290,6 +362,18 @@ async def ask_preset(
         {"answer": answer, "citations": citations_raw, "used_tools": used_tools},
         locale=locale,
     )
+    if trace:
+        trace.add_step(
+            "preset_cache_store",
+            {
+                "assistant_type": assistant_type,
+                "question_id": question_id,
+                "locale": locale,
+            },
+        )
+        trace.cache_source = "llm_generate"
+        trace.cache_strategy = "preset_regenerate"
+        trace.cached = False
 
     return AssistantAnswer(
         question_id=question_id,
@@ -308,13 +392,28 @@ async def ask_custom(
     locale: Locale,
     forecasting_service: Any = None,
     forecasting_repo: Any = None,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> AssistantAnswer:
     exact_cached = await assistant_query_cache.get_exact(assistant_type, query, locale)
+    if trace:
+        trace.add_step(
+            "custom_exact_cache_lookup",
+            {
+                "assistant_type": assistant_type,
+                "locale": locale,
+                "query": query,
+                "hit": bool(exact_cached),
+            },
+        )
     if exact_cached:
         logger.info(
             "assistants | type=%s locale=%s status=custom_exact_cache_hit",
             assistant_type, locale,
         )
+        if trace:
+            trace.cache_source = "custom_exact_cache"
+            trace.cache_strategy = "exact_reuse"
+            trace.cached = True
         return AssistantAnswer(
             question_id=None,
             query=query,
@@ -326,6 +425,17 @@ async def ask_custom(
         )
 
     semantic_cached = await assistant_query_cache.get_semantic(assistant_type, query, locale)
+    if trace:
+        trace.add_step(
+            "custom_semantic_lookup",
+            {
+                "assistant_type": assistant_type,
+                "locale": locale,
+                "query": query,
+                "hit": bool(semantic_cached),
+                "candidate": semantic_cached,
+            },
+        )
     if semantic_cached:
         cached_payload = _cache_payload_from_entry(semantic_cached)
         decision = decide_semantic_cache_strategy(
@@ -333,6 +443,17 @@ async def ask_custom(
             reuse_similarity=settings.assistants_semantic_cache_reuse_similarity,
             rewrite_similarity=settings.assistants_semantic_cache_rewrite_similarity,
         )
+        if trace:
+            trace.add_step(
+                "semantic_policy_decision",
+                {
+                    "decision": decision.strategy,
+                    "similarity": decision.similarity,
+                    "reuse_similarity": settings.assistants_semantic_cache_reuse_similarity,
+                    "rewrite_similarity": settings.assistants_semantic_cache_rewrite_similarity,
+                    "rewrite_enabled": settings.assistants_semantic_cache_rewrite_enabled,
+                },
+            )
 
         if decision.strategy == "reuse":
             logger.info(
@@ -340,9 +461,22 @@ async def ask_custom(
                 assistant_type, locale, decision.similarity,
             )
             await assistant_query_cache.set_exact(assistant_type, query, locale, cached_payload)
+            if trace:
+                trace.add_step(
+                    "custom_exact_cache_store",
+                    {
+                        "assistant_type": assistant_type,
+                        "locale": locale,
+                        "source": "semantic_reuse",
+                    },
+                )
+                trace.cache_source = "custom_semantic_cache"
+                trace.cache_strategy = "semantic_reuse"
+                trace.cached = True
+                trace.similarity = decision.similarity
             return _build_custom_answer(query, locale, cached_payload, cached=True)
 
-        if decision.strategy == "rewrite":
+        if decision.strategy == "rewrite" and settings.assistants_semantic_cache_rewrite_enabled:
             logger.info(
                 "assistants | type=%s locale=%s status=custom_semantic_rewrite similarity=%.3f",
                 assistant_type, locale, decision.similarity,
@@ -352,6 +486,7 @@ async def ask_custom(
                 query=query,
                 cached_query=str(semantic_cached.get("cached_query", "")),
                 cached_payload=cached_payload,
+                trace=trace,
             )
             if rewritten_answer:
                 payload = _cache_payload(
@@ -361,7 +496,31 @@ async def ask_custom(
                 )
                 await assistant_query_cache.set_exact(assistant_type, query, locale, payload)
                 await assistant_query_cache.set_semantic(assistant_type, query, locale, payload)
+                if trace:
+                    trace.add_step(
+                        "custom_cache_store",
+                        {
+                            "assistant_type": assistant_type,
+                            "locale": locale,
+                            "source": "semantic_rewrite",
+                        },
+                    )
+                    trace.cache_source = "semantic_rewrite"
+                    trace.cache_strategy = "semantic_rewrite"
+                    trace.cached = False
+                    trace.similarity = decision.similarity
                 return _build_custom_answer(query, locale, payload, cached=False)
+
+        if decision.strategy == "rewrite" and not settings.assistants_semantic_cache_rewrite_enabled and trace:
+            trace.add_step(
+                "semantic_rewrite_disabled",
+                {
+                    "assistant_type": assistant_type,
+                    "locale": locale,
+                    "similarity": decision.similarity,
+                },
+                status="warning",
+            )
 
         logger.info(
             "assistants | type=%s locale=%s status=custom_semantic_miss similarity=%.3f",
@@ -371,11 +530,25 @@ async def ask_custom(
         )
 
     answer, citations_raw, used_tools = await _generate(
-        assistant_type, query, forecasting_service, forecasting_repo
+        assistant_type, query, forecasting_service, forecasting_repo, trace=trace
     )
     payload = _cache_payload(answer=answer, citations=citations_raw, used_tools=used_tools)
     await assistant_query_cache.set_exact(assistant_type, query, locale, payload)
     await assistant_query_cache.set_semantic(assistant_type, query, locale, payload)
+    if trace:
+        trace.add_step(
+            "custom_cache_store",
+            {
+                "assistant_type": assistant_type,
+                "locale": locale,
+                "source": "regenerate",
+            },
+        )
+        trace.cache_source = "llm_generate"
+        trace.cache_strategy = "regenerate"
+        trace.cached = False
+        if semantic_cached:
+            trace.similarity = float(semantic_cached.get("similarity", 0.0))
     return _build_custom_answer(query, locale, payload, cached=False)
 
 

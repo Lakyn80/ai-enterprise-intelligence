@@ -2,7 +2,7 @@
 
 import json
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.ai_assistant.providers.base import LLMProvider
 from app.ai_assistant.tools.forecast_tools import (
@@ -20,6 +20,9 @@ from app.ai_assistant.tools.knowledge_tools import (
     query_knowledge,
     get_knowledge_tools_spec,
 )
+
+if TYPE_CHECKING:
+    from app.assistants.trace_recorder import AssistantTraceRecorder
 
 
 SYSTEM_PROMPT = """You are an AI analyst assistant for retail forecasting. You MUST base your answers ONLY on data returned by the tools you call. You must NEVER invent or guess numeric values.
@@ -50,6 +53,7 @@ async def execute_tool(
     forecasting_service: Any,
     forecasting_repo: Any,
     knowledge_service: Any | None,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> str:
     """Execute a tool by name and return result as string."""
     if name == "get_forecast":
@@ -91,7 +95,7 @@ async def execute_tool(
 
     if name == "query_knowledge":
         q = arguments.get("query", "")
-        result = await query_knowledge(knowledge_service, q)
+        result = await query_knowledge(knowledge_service, q, trace=trace)
         return json.dumps(result)
 
     return json.dumps({"error": f"Unknown tool: {name}"})
@@ -104,6 +108,7 @@ async def run_agent(
     forecasting_repo: Any,
     knowledge_service: Any | None,
     rag_enabled: bool = False,
+    trace: "AssistantTraceRecorder | None" = None,
 ) -> tuple[str, list[str], list[dict]]:
     """
     Run the agent: user_input -> tool_selection -> tool_execute -> answer_compose.
@@ -117,14 +122,41 @@ async def run_agent(
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
+    if trace:
+        trace.add_step(
+            "analyst_agent_start",
+            {
+                "rag_enabled": rag_enabled,
+                "messages": messages,
+                "tools_spec": tools_spec,
+            },
+        )
     used_tools: list[str] = []
     citations: list[dict] = []
     max_iterations = 5
 
-    for _ in range(max_iterations):
+    for iteration in range(max_iterations):
+        if trace:
+            trace.add_step(
+                "analyst_llm_request",
+                {
+                    "iteration": iteration + 1,
+                    "messages": messages,
+                    "tools_spec": tools_spec,
+                },
+            )
         response = await provider.generate(messages, tools_spec)
         content = response.get("content", "")
         tool_calls = response.get("tool_calls", [])
+        if trace:
+            trace.add_step(
+                "analyst_llm_response",
+                {
+                    "iteration": iteration + 1,
+                    "content": content,
+                    "tool_calls": tool_calls,
+                },
+            )
 
         if not tool_calls:
             return content.strip(), used_tools, citations
@@ -137,8 +169,18 @@ async def run_agent(
             used_tools.append(name)
             result = await execute_tool(
                 name, args,
-                forecasting_service, forecasting_repo, knowledge_service,
+                forecasting_service, forecasting_repo, knowledge_service, trace=trace,
             )
+            if trace:
+                trace.add_step(
+                    "analyst_tool_execution",
+                    {
+                        "iteration": iteration + 1,
+                        "tool_name": name,
+                        "arguments": args,
+                        "result": result,
+                    },
+                )
             tool_messages.append({
                 "role": "tool",
                 "tool_call_id": tc.get("id", "unknown"),

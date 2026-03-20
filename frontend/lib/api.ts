@@ -161,6 +161,41 @@ export interface AssistantAnswer {
   cached: boolean;
   citations: Citation[];
   used_tools: string[];
+  trace_id?: string | null;
+  trace_summary?: AssistantTraceSummary | null;
+}
+
+export interface AssistantTraceSummary {
+  trace_id: string;
+  status: string;
+  request_kind: "preset" | "custom";
+  cached: boolean;
+  cache_source?: string | null;
+  cache_strategy?: string | null;
+  similarity?: number | null;
+  total_latency_ms?: number | null;
+}
+
+export interface AssistantTraceStep {
+  step_index: number;
+  step_name: string;
+  status: string;
+  latency_ms?: number | null;
+  payload?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AssistantTrace extends AssistantTraceSummary {
+  assistant_type: AssistantType;
+  locale: Locale;
+  question_id?: string | null;
+  user_query: string;
+  normalized_query: string;
+  answer?: string | null;
+  error?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+  steps: AssistantTraceStep[];
 }
 
 export async function fetchPresets(
@@ -202,6 +237,12 @@ export async function fetchAskCustom(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ assistant_type: assistantType, query, locale }),
   });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchAssistantTrace(traceId: string): Promise<AssistantTrace> {
+  const r = await fetch(`${API_BASE}/api/assistants/traces/${traceId}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }

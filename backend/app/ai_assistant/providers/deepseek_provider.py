@@ -25,6 +25,7 @@ class DeepSeekProvider(LLMProvider):
         kwargs: dict[str, Any] = {
             "model": "deepseek-chat",
             "messages": messages,
+            "temperature": settings.llm_temperature,
         }
         if tools:
             kwargs["tools"] = tools

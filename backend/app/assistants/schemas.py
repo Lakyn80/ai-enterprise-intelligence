@@ -1,6 +1,7 @@
 """Pydantic schemas for the Assistants API."""
 
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
 from pydantic import BaseModel
 
 Locale = Literal["en", "cs", "sk", "ru"]
@@ -35,6 +36,39 @@ class Citation(BaseModel):
     excerpt: str | None = None
 
 
+class AssistantTraceSummary(BaseModel):
+    trace_id: str
+    status: str
+    request_kind: Literal["preset", "custom"]
+    cached: bool
+    cache_source: str | None = None
+    cache_strategy: str | None = None
+    similarity: float | None = None
+    total_latency_ms: int | None = None
+
+
+class AssistantTraceStepOut(BaseModel):
+    step_index: int
+    step_name: str
+    status: str
+    latency_ms: int | None = None
+    payload: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class AssistantTraceOut(AssistantTraceSummary):
+    assistant_type: AssistantType
+    locale: Locale
+    question_id: str | None = None
+    user_query: str
+    normalized_query: str
+    answer: str | None = None
+    error: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+    steps: list[AssistantTraceStepOut] = []
+
+
 class AssistantAnswer(BaseModel):
     question_id: str | None = None
     query: str
@@ -43,3 +77,5 @@ class AssistantAnswer(BaseModel):
     cached: bool = False
     citations: list[Citation] = []
     used_tools: list[str] = []
+    trace_id: str | None = None
+    trace_summary: AssistantTraceSummary | None = None

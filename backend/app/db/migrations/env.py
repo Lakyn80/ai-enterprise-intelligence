@@ -8,6 +8,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.db.base import Base
+from app.assistants.db_models import AssistantTrace, AssistantTraceStep
 from app.forecasting.db_models import ModelArtifact, SalesFact
 from app.settings import settings
 

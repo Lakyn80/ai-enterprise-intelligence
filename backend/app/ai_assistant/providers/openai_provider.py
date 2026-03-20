@@ -22,6 +22,7 @@ class OpenAIProvider(LLMProvider):
         kwargs: dict[str, Any] = {
             "model": "gpt-4o-mini",
             "messages": messages,
+            "temperature": settings.llm_temperature,
         }
         if tools:
             kwargs["tools"] = tools

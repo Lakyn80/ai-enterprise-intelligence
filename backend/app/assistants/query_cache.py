@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,18 +12,11 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 
 from app.assistants.cache import assistant_cache
+from app.assistants.query_normalization import normalise_query
 from app.knowledge_rag.ingest.embeddings import get_embedding_provider
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
-
-
-def normalise_query(query: str) -> str:
-    query = query.strip().lower()
-    query = re.sub(r"[^\w\s]", " ", query, flags=re.UNICODE)
-    return re.sub(r"\s+", " ", query).strip()
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

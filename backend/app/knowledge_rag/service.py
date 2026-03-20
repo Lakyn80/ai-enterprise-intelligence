@@ -1,6 +1,9 @@
 """Knowledge RAG service."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.assistants.trace_recorder import AssistantTraceRecorder
 
 from app.knowledge_rag.ingest.chunking import chunk_text
 from app.knowledge_rag.ingest.loaders import load_documents_from_path
@@ -194,49 +197,104 @@ class KnowledgeService:
         reverse = bool(want_max)
         return sorted(docs, key=key_fn, reverse=reverse)
 
-    async def query(self, query: str) -> dict[str, Any]:
+    async def query(
+        self,
+        query: str,
+        trace: "AssistantTraceRecorder | None" = None,
+    ) -> dict[str, Any]:
         """Query RAG and return LLM-composed answer with citations."""
         if not self._store:
+            if trace:
+                trace.add_step("knowledge_rag_disabled", {"query": query}, status="warning")
             return {"answer": "RAG is disabled.", "citations": []}
         k, where = self._infer_search_params(query)
+        if trace:
+            trace.add_step(
+                "knowledge_search_params",
+                {"query": query, "k": k, "where": where},
+            )
         docs = await self._store.similarity_search(query, k=k, where=where)
+        if trace:
+            trace.add_step(
+                "knowledge_retrieval_result",
+                {
+                    "doc_count": len(docs),
+                    "documents": [
+                        {
+                            "content": d.get("content", ""),
+                            "metadata": d.get("metadata", {}),
+                        }
+                        for d in docs
+                    ],
+                },
+            )
         if not docs:
             return {"answer": "No relevant documents found.", "citations": []}
         # For large product-comparison result sets, pre-sort by the relevant
         # metric so the LLM can simply pick the first/last entry.
         if k >= 20 and where and isinstance(where, dict) and where.get("report_type") == "product":
             docs = self._presort_docs(docs, query)
+            if trace:
+                trace.add_step(
+                    "knowledge_presort_docs",
+                    {
+                        "sorted_documents": [
+                            {
+                                "content": d.get("content", ""),
+                                "metadata": d.get("metadata", {}),
+                            }
+                            for d in docs
+                        ],
+                    },
+                )
         context = "\n\n".join(d["content"] for d in docs)
         citations = [
             {"document_id": d.get("metadata", {}).get("source", "unknown"), "chunk": d["content"][:200]}
             for d in docs
         ]
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant for a retail forecasting platform. "
+                    "Answer the user's question based ONLY on the provided document excerpts. "
+                    "Rules:\n"
+                    "1. Always quote exact numerical values as written in the excerpts — "
+                    "never round, approximate, or reformat them.\n"
+                    "2. When finding the highest or lowest value, scan EVERY excerpt and "
+                    "compare ALL values before giving your answer.\n"
+                    "3. If the excerpts do not contain enough information to answer the "
+                    "question, respond with exactly: "
+                    "'There is not enough information in the provided documents to answer "
+                    "this question.'"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Document excerpts:\n\n{context[:12000]}\n\nQuestion: {query}",
+            },
+        ]
         try:
             from app.ai_assistant.providers.deepseek_provider import DeepSeekProvider
             llm = DeepSeekProvider()
-            result = await llm.generate([
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant for a retail forecasting platform. "
-                        "Answer the user's question based ONLY on the provided document excerpts. "
-                        "Rules:\n"
-                        "1. Always quote exact numerical values as written in the excerpts — "
-                        "never round, approximate, or reformat them.\n"
-                        "2. When finding the highest or lowest value, scan EVERY excerpt and "
-                        "compare ALL values before giving your answer.\n"
-                        "3. If the excerpts do not contain enough information to answer the "
-                        "question, respond with exactly: "
-                        "'There is not enough information in the provided documents to answer "
-                        "this question.'"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"Document excerpts:\n\n{context[:12000]}\n\nQuestion: {query}",
-                },
-            ])
+            if trace:
+                trace.add_step(
+                    "knowledge_llm_request",
+                    {"provider": "deepseek", "messages": messages},
+                )
+            result = await llm.generate(messages)
             answer = result["content"] or "No answer generated."
+            if trace:
+                trace.add_step(
+                    "knowledge_llm_response",
+                    {"content": answer, "tool_calls": result.get("tool_calls", [])},
+                )
         except Exception:
             answer = f"Based on the following excerpts:\n\n{context[:2000]}"
+            if trace:
+                trace.add_step(
+                    "knowledge_llm_fallback",
+                    {"answer": answer},
+                    status="warning",
+                )
         return {"answer": answer, "citations": citations}
