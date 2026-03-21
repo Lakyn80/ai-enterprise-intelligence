@@ -68,6 +68,14 @@ TOP_PROMO_LIFT_PARAPHRASES = [
     "Which product has the highest promo lift?",
 ]
 
+TOP_AVG_PRICE_PARAPHRASES = [
+    "Který produkt má nejvyšší průměrnou prodejní cenu?",
+    "Který produkt má nejvyšší průměrnou cenu?",
+    "Ktery produkt ma nejvyssi prumernou prodejni cenu",
+    "Which product has the highest average selling price?",
+    "Which product has the highest average price?",
+]
+
 
 @pytest.mark.parametrize("query", TOP_QUANTITY_PARAPHRASES)
 def test_map_top_quantity_paraphrases(query: str):
@@ -124,6 +132,16 @@ def test_map_top_promo_lift_paraphrases(query: str):
     assert mapping.unsupported_reason is None
     assert mapping.spec is not None
     assert mapping.spec.metric == "promo_lift"
+    assert mapping.spec.direction == "desc"
+
+
+@pytest.mark.parametrize("query", TOP_AVG_PRICE_PARAPHRASES)
+def test_map_top_average_price_paraphrases(query: str):
+    mapping = map_fact_query(query)
+    assert mapping.matched is True
+    assert mapping.unsupported_reason is None
+    assert mapping.spec is not None
+    assert mapping.spec.metric == "avg_price"
     assert mapping.spec.direction == "desc"
 
 

@@ -58,6 +58,13 @@ _PROMO_LIFT_TERMS = (
     "benefit most from promotions",
     "most from promotions",
 )
+_AVG_PRICE_TERMS = (
+    "prumernou prodejni cenu",
+    "prumernou cenu",
+    "average selling price",
+    "average sale price",
+    "average price",
+)
 _QUANTITY_TERMS = (
     "nejprodavanejsi",
     "nejmene prodavany",
@@ -158,6 +165,8 @@ def map_fact_query(query: str) -> FactQueryMapping:
 def _resolve_metric(normalized: str) -> FactMetric | None:
     if any(term in normalized for term in _REVENUE_TERMS):
         return "revenue"
+    if any(term in normalized for term in _AVG_PRICE_TERMS):
+        return "avg_price"
     if any(term in normalized for term in _PROMO_LIFT_TERMS):
         return "promo_lift"
     if any(term in normalized for term in _QUANTITY_TERMS):

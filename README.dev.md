@@ -191,6 +191,7 @@ question
 ### Supported in v1
 - top product by quantity
 - top product by revenue
+- top product by average selling price
 - bottom product by quantity
 - bottom product by revenue
 - top product by promo lift

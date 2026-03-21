@@ -42,6 +42,10 @@ def _render_czech(spec: FactQuerySpec, product_id: str, value: str) -> str:
         return f"Produkt s nejvyššími tržbami je {product_id} ({value})."
     if spec.metric == "revenue" and spec.direction == "asc":
         return f"Produkt s nejnižšími tržbami je {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "desc":
+        return f"Produkt s nejvyšší průměrnou prodejní cenou je {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "asc":
+        return f"Produkt s nejnižší průměrnou prodejní cenou je {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "desc":
         return f"Produkt, který nejvíce těží z akcí, je {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "asc":
@@ -58,6 +62,10 @@ def _render_slovak(spec: FactQuerySpec, product_id: str, value: str) -> str:
         return f"Produkt s najvyššími tržbami je {product_id} ({value})."
     if spec.metric == "revenue" and spec.direction == "asc":
         return f"Produkt s najnižšími tržbami je {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "desc":
+        return f"Produkt s najvyššou priemernou predajnou cenou je {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "asc":
+        return f"Produkt s najnižšou priemernou predajnou cenou je {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "desc":
         return f"Produkt, ktorý najviac profituje z akcií, je {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "asc":
@@ -74,6 +82,10 @@ def _render_russian(spec: FactQuerySpec, product_id: str, value: str) -> str:
         return f"Продукт с самой высокой выручкой: {product_id} ({value})."
     if spec.metric == "revenue" and spec.direction == "asc":
         return f"Продукт с самой низкой выручкой: {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "desc":
+        return f"Продукт с самой высокой средней ценой продажи: {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "asc":
+        return f"Продукт с самой низкой средней ценой продажи: {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "desc":
         return f"Продукт, который больше всего выигрывает от акций: {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "asc":
@@ -90,6 +102,10 @@ def _render_english(spec: FactQuerySpec, product_id: str, value: str) -> str:
         return f"Product with the highest revenue is {product_id} ({value})."
     if spec.metric == "revenue" and spec.direction == "asc":
         return f"Product with the lowest revenue is {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "desc":
+        return f"Product with the highest average selling price is {product_id} ({value})."
+    if spec.metric == "avg_price" and spec.direction == "asc":
+        return f"Product with the lowest average selling price is {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "desc":
         return f"Product benefiting the most from promotions is {product_id} ({value})."
     if spec.metric == "promo_lift" and spec.direction == "asc":

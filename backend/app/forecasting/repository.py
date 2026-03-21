@@ -134,6 +134,7 @@ class ForecastingRepository:
                 func.count(SalesFact.id),
                 func.coalesce(func.sum(SalesFact.quantity), 0.0),
                 func.coalesce(func.sum(SalesFact.revenue), 0.0),
+                func.coalesce(func.sum(SalesFact.price), 0.0),
                 func.coalesce(
                     func.sum(case((SalesFact.promo_flag.is_(True), 1), else_=0)),
                     0,
@@ -151,10 +152,11 @@ class ForecastingRepository:
             "row_count": int(row[0] or 0),
             "quantity_sum": round(float(row[1] or 0.0), 6),
             "revenue_sum": round(float(row[2] or 0.0), 6),
-            "promo_row_count": int(row[3] or 0),
-            "promo_quantity_sum": round(float(row[4] or 0.0), 6),
-            "date_from": row[5].isoformat() if row[5] else None,
-            "date_to": row[6].isoformat() if row[6] else None,
+            "price_sum": round(float(row[3] or 0.0), 6),
+            "promo_row_count": int(row[4] or 0),
+            "promo_quantity_sum": round(float(row[5] or 0.0), 6),
+            "date_from": row[6].isoformat() if row[6] else None,
+            "date_to": row[7].isoformat() if row[7] else None,
         }
 
     async def get_product_rank_winners(
@@ -210,6 +212,16 @@ class ForecastingRepository:
                 .having(promo_count > 0)
                 .having(non_promo_count > 0)
                 .having(non_promo_avg != 0)
+                .subquery()
+            )
+        elif metric == "avg_price":
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    func.avg(SalesFact.price).label("metric_value"),
+                )
+                .where(SalesFact.price.is_not(None))
+                .group_by(SalesFact.product_id)
                 .subquery()
             )
         else:
