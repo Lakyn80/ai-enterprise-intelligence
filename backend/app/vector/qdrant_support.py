@@ -14,6 +14,9 @@ def create_async_qdrant_client() -> Any:
     kwargs: dict[str, Any] = {
         "timeout": settings.qdrant_timeout,
         "prefer_grpc": settings.qdrant_prefer_grpc,
+        # The local stack pins an older Qdrant server image, while the Python client
+        # may be newer. We handle request-shape compatibility in this module.
+        "check_compatibility": False,
     }
     if settings.qdrant_api_key:
         kwargs["api_key"] = settings.qdrant_api_key

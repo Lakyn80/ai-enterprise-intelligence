@@ -1,10 +1,13 @@
 """Tests for custom assistant query cache."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from uuid import UUID
 
 import pytest
 
 from app.assistants.query_cache import AssistantQueryCache, normalise_query
+from app.assistants.semantic_backends.qdrant_backend import QdrantSemanticCacheBackend
 
 
 def test_normalise_query_collapses_case_punctuation_and_whitespace():
@@ -91,3 +94,36 @@ def test_get_backend_selects_chroma_by_default():
         backend = cache._get_backend()
 
     assert backend.__class__.__name__ == "ChromaSemanticCacheBackend"
+
+
+@pytest.mark.asyncio
+async def test_qdrant_backend_set_uses_uuid_point_ids():
+    backend = QdrantSemanticCacheBackend()
+    backend._client = AsyncMock()
+    backend._embedding_provider = AsyncMock()
+    backend._embedding_provider.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
+
+    class DummyPointStruct:
+        def __init__(self, *, id, vector, payload):
+            self.id = id
+            self.vector = vector
+            self.payload = payload
+
+    dummy_models = SimpleNamespace(PointStruct=DummyPointStruct)
+
+    with patch(
+        "app.assistants.semantic_backends.qdrant_backend.ensure_qdrant_collection",
+        AsyncMock(),
+    ), patch(
+        "app.assistants.semantic_backends.qdrant_backend.get_qdrant_models",
+        return_value=dummy_models,
+    ):
+        await backend.set(
+            "knowledge",
+            "Jak se vyvíjejí prodeje produktu P0001?",
+            "cs",
+            {"answer": "ok", "citations": [], "used_tools": []},
+        )
+
+    point = backend._client.upsert.await_args.kwargs["points"][0]
+    assert str(UUID(point.id)) == point.id

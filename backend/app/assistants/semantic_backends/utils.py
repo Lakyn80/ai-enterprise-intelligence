@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from uuid import NAMESPACE_URL, uuid5
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,6 +12,10 @@ from typing import Any
 def semantic_doc_id(assistant_type: str, locale: str, normalised_query: str) -> str:
     digest = hashlib.sha256(normalised_query.encode("utf-8")).hexdigest()
     return f"{assistant_type}:{locale}:{digest}"
+
+
+def semantic_qdrant_point_id(assistant_type: str, locale: str, normalised_query: str) -> str:
+    return str(uuid5(NAMESPACE_URL, semantic_doc_id(assistant_type, locale, normalised_query)))
 
 
 def now_iso() -> str:

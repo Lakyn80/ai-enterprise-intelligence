@@ -11,7 +11,7 @@ from app.assistants.semantic_backends.base import SemanticCacheBackend
 from app.assistants.semantic_backends.utils import (
     now_iso,
     semantic_candidate_from_metadata,
-    semantic_doc_id,
+    semantic_qdrant_point_id,
 )
 from app.knowledge_rag.ingest.embeddings import get_embedding_provider
 from app.settings import settings
@@ -120,7 +120,7 @@ class QdrantSemanticCacheBackend(SemanticCacheBackend):
                 collection_name=settings.assistants_semantic_cache_collection_name,
                 points=[
                     models.PointStruct(
-                        id=semantic_doc_id(assistant_type, locale, normalised),
+                        id=semantic_qdrant_point_id(assistant_type, locale, normalised),
                         vector=embedding,
                         payload=metadata,
                     )
