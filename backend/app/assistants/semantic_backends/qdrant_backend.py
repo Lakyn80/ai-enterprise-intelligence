@@ -20,6 +20,7 @@ from app.vector.qdrant_support import (
     create_async_qdrant_client,
     ensure_qdrant_collection,
     get_qdrant_models,
+    qdrant_similarity_query,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,8 @@ class QdrantSemanticCacheBackend(SemanticCacheBackend):
             q_filter = build_qdrant_filter(
                 {"$and": [{"assistant_type": assistant_type}, {"locale": locale}]}
             )
-            results = await client.search(
+            results = await qdrant_similarity_query(
+                client,
                 collection_name=settings.assistants_semantic_cache_collection_name,
                 query_vector=embedding,
                 query_filter=q_filter,

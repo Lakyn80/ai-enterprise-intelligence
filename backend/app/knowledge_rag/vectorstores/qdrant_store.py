@@ -13,6 +13,7 @@ from app.vector.qdrant_support import (
     create_async_qdrant_client,
     ensure_qdrant_collection,
     get_qdrant_models,
+    qdrant_similarity_query,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,8 @@ class QdrantVectorStore(VectorStore):
                 return []
 
             query_embedding = await self._embedding_provider.embed_query(query)
-            results = await client.search(
+            results = await qdrant_similarity_query(
+                client,
                 collection_name=settings.rag_collection_name,
                 query_vector=query_embedding,
                 query_filter=build_qdrant_filter(where),

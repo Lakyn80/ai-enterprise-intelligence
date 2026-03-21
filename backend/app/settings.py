@@ -1,13 +1,20 @@
 """Application settings from environment variables."""
 
+from pathlib import Path
+from typing import Any
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Database
@@ -53,6 +60,19 @@ class Settings(BaseSettings):
 
     # Paths (default for local; Docker uses /app/artifacts)
     artifacts_path: str = "./artifacts"
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
+            return True
+        if normalized in {"0", "false", "no", "off", "release", "production", "prod"}:
+            return False
+        return value
 
 
 settings = Settings()

@@ -31,6 +31,44 @@ def get_qdrant_models() -> Any:
     return models
 
 
+async def qdrant_similarity_query(
+    client: Any,
+    *,
+    collection_name: str,
+    query_vector: list[float],
+    query_filter: Any | None,
+    limit: int,
+    with_payload: bool = True,
+    with_vectors: bool = False,
+) -> list[Any]:
+    """Run a similarity query across supported qdrant-client versions."""
+    if hasattr(client, "query_points"):
+        response = await client.query_points(
+            collection_name=collection_name,
+            query=query_vector,
+            query_filter=query_filter,
+            limit=limit,
+            with_payload=with_payload,
+            with_vectors=with_vectors,
+        )
+        return list(getattr(response, "points", []) or [])
+
+    if hasattr(client, "search"):
+        return list(
+            await client.search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=with_payload,
+                with_vectors=with_vectors,
+            )
+            or []
+        )
+
+    raise AttributeError("Qdrant client does not support similarity search methods")
+
+
 def build_qdrant_filter(where: dict[str, Any] | None) -> Any | None:
     """Translate a simple Chroma-style where clause into a Qdrant filter."""
     if not where:
