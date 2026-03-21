@@ -32,8 +32,8 @@ class AssistantTrace(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     step_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     steps: Mapped[list["AssistantTraceStep"]] = relationship(
         back_populates="trace",
         cascade="all, delete-orphan",
@@ -57,5 +57,5 @@ class AssistantTraceStep(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     trace: Mapped[AssistantTrace] = relationship(back_populates="steps")
