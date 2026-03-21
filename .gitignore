@@ -76,8 +76,10 @@ htmlcov/
 
 # Data
 data/
+retail_forecast.sql
 
 # Misc
 *.bak
 *.tmp
 .cache/
+.claude/

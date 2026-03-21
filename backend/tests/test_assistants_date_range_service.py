@@ -61,6 +61,36 @@ async def test_date_range_service_resolves_czech_paraphrase():
 
 
 @pytest.mark.asyncio
+async def test_date_range_service_resolves_czech_genitive_variant():
+    with patch("app.assistants.date_range_service._get_cache", AsyncMock(return_value=None)), \
+         patch("app.assistants.date_range_service._set_cache", AsyncMock()):
+        result = await deterministic_date_range_service.try_answer(
+            assistant_type="knowledge",
+            query="Jaké je datumové rozmezí prodejních dat?",
+            locale="cs",
+            forecasting_repo=FakeDateRangeRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Prodejní data pokrývají období od 2022-01-01 do 2024-01-01."
+
+
+@pytest.mark.asyncio
+async def test_date_range_service_resolves_czech_data_o_prodejich_variant():
+    with patch("app.assistants.date_range_service._get_cache", AsyncMock(return_value=None)), \
+         patch("app.assistants.date_range_service._set_cache", AsyncMock()):
+        result = await deterministic_date_range_service.try_answer(
+            assistant_type="knowledge",
+            query="Od kdy do kdy máme data o prodejích?",
+            locale="cs",
+            forecasting_repo=FakeDateRangeRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Prodejní data pokrývají období od 2022-01-01 do 2024-01-01."
+
+
+@pytest.mark.asyncio
 async def test_date_range_service_reuses_intent_cache_for_paraphrase():
     cached = {
         "intent": "date_range_of_data",

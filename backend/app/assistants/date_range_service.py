@@ -30,6 +30,10 @@ _DATA_TERMS = (
     "sales data",
     "prodejni data",
     "predajne data",
+    "prodejnich dat",
+    "predajnych dat",
+    "data o prodej",
+    "data o predaj",
 )
 
 
