@@ -40,6 +40,24 @@ _REVENUE_TERMS = (
     "revenue",
     "utrzi",
 )
+_PROMO_LIFT_TERMS = (
+    "promo lift",
+    "promo efekt",
+    "promo effect",
+    "promotional lift",
+    "promotion lift",
+    "tezi z akci",
+    "tezi z promo akci",
+    "profituje z akci",
+    "profituje z promo akci",
+    "benefits from promotions",
+    "benefits the most from promotions",
+    "gains from promotions",
+    "gains the most from promotions",
+    "profits from promotions",
+    "benefit most from promotions",
+    "most from promotions",
+)
 _QUANTITY_TERMS = (
     "nejprodavanejsi",
     "nejmene prodavany",
@@ -140,6 +158,8 @@ def map_fact_query(query: str) -> FactQueryMapping:
 def _resolve_metric(normalized: str) -> FactMetric | None:
     if any(term in normalized for term in _REVENUE_TERMS):
         return "revenue"
+    if any(term in normalized for term in _PROMO_LIFT_TERMS):
+        return "promo_lift"
     if any(term in normalized for term in _QUANTITY_TERMS):
         return "quantity"
     return None

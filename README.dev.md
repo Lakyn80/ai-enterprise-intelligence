@@ -193,6 +193,7 @@ question
 - top product by revenue
 - bottom product by quantity
 - bottom product by revenue
+- top product by promo lift
 
 ### Why it exists
 - RAG should not decide exact rankings

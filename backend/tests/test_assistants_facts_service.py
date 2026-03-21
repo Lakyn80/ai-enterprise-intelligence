@@ -17,6 +17,8 @@ class FakeForecastingRepo:
             "row_count": 4,
             "quantity_sum": 62.0,
             "revenue_sum": 460.0,
+            "promo_row_count": 2,
+            "promo_quantity_sum": 29.0,
             "date_from": "2022-01-01",
             "date_to": "2024-01-01",
         }
@@ -30,6 +32,7 @@ class FakeForecastingRepo:
                 {"product_id": "P0003", "value": 40.0},
                 {"product_id": "P0004", "value": 40.0},
             ],
+            ("promo_lift", "desc"): [{"product_id": "P0001", "value": 12.9}],
         }
         return data[(metric, direction)]
 
@@ -174,3 +177,20 @@ async def test_deterministic_facts_service_renders_tie_stably():
 
     assert result is not None
     assert result.answer == "Na posledním místě je shoda mezi P0003, P0004 (40.00)."
+
+
+@pytest.mark.asyncio
+async def test_deterministic_facts_service_resolves_promo_lift_stably():
+    with patch("app.assistants.facts.service.deterministic_facts_cache") as mock_cache:
+        mock_cache.get = AsyncMock(return_value=None)
+        mock_cache.set = AsyncMock()
+
+        result = await deterministic_facts_service.try_answer(
+            assistant_type="knowledge",
+            query="Který produkt nejvíce těží z akcí?",
+            locale="cs",
+            forecasting_repo=FakeForecastingRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Produkt, který nejvíce těží z akcí, je P0001 (+12.9%)."

@@ -57,6 +57,17 @@ BOTTOM_REVENUE_PARAPHRASES = [
     "Which product earns the least revenue?",
 ]
 
+TOP_PROMO_LIFT_PARAPHRASES = [
+    "Který produkt nejvíce těží z akcí?",
+    "Který produkt nejvíce těží z promo akcí?",
+    "Který produkt má nejvyšší promo efekt?",
+    "Který produkt má nejvyšší promo lift?",
+    "Ktery produkt nejvice tezi z akci",
+    "Which product benefits the most from promotions?",
+    "Which product gains the most from promotions?",
+    "Which product has the highest promo lift?",
+]
+
 
 @pytest.mark.parametrize("query", TOP_QUANTITY_PARAPHRASES)
 def test_map_top_quantity_paraphrases(query: str):
@@ -104,6 +115,16 @@ def test_same_family_maps_to_same_canonical_spec():
         for query in TOP_QUANTITY_PARAPHRASES
     }
     assert len(spec_hashes) == 1
+
+
+@pytest.mark.parametrize("query", TOP_PROMO_LIFT_PARAPHRASES)
+def test_map_top_promo_lift_paraphrases(query: str):
+    mapping = map_fact_query(query)
+    assert mapping.matched is True
+    assert mapping.unsupported_reason is None
+    assert mapping.spec is not None
+    assert mapping.spec.metric == "promo_lift"
+    assert mapping.spec.direction == "desc"
 
 
 def test_mapper_marks_unsupported_category_filter():

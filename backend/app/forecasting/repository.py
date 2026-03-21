@@ -127,13 +127,21 @@ class ForecastingRepository:
 
     async def get_sales_dataset_signature(self) -> dict[str, str | int | float | None]:
         """Return a stable aggregate signature for sales_facts cache invalidation."""
-        from sqlalchemy import func
+        from sqlalchemy import case, func
 
         result = await self._session.execute(
             select(
                 func.count(SalesFact.id),
                 func.coalesce(func.sum(SalesFact.quantity), 0.0),
                 func.coalesce(func.sum(SalesFact.revenue), 0.0),
+                func.coalesce(
+                    func.sum(case((SalesFact.promo_flag.is_(True), 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(case((SalesFact.promo_flag.is_(True), SalesFact.quantity), else_=0.0)),
+                    0.0,
+                ),
                 func.min(SalesFact.date),
                 func.max(SalesFact.date),
             )
@@ -143,8 +151,10 @@ class ForecastingRepository:
             "row_count": int(row[0] or 0),
             "quantity_sum": round(float(row[1] or 0.0), 6),
             "revenue_sum": round(float(row[2] or 0.0), 6),
-            "date_from": row[3].isoformat() if row[3] else None,
-            "date_to": row[4].isoformat() if row[4] else None,
+            "promo_row_count": int(row[3] or 0),
+            "promo_quantity_sum": round(float(row[4] or 0.0), 6),
+            "date_from": row[5].isoformat() if row[5] else None,
+            "date_to": row[6].isoformat() if row[6] else None,
         }
 
     async def get_product_rank_winners(
@@ -157,7 +167,7 @@ class ForecastingRepository:
         limit: int = 1,
     ) -> list[dict[str, float | str]]:
         """Return all tied winners for a supported top/bottom product query."""
-        from sqlalchemy import func
+        from sqlalchemy import case, func
 
         if filters:
             raise ValueError("Product rank resolver does not support filters yet.")
@@ -168,19 +178,42 @@ class ForecastingRepository:
 
         if metric == "quantity":
             metric_column = SalesFact.quantity
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    func.sum(metric_column).label("metric_value"),
+                )
+                .group_by(SalesFact.product_id)
+                .subquery()
+            )
         elif metric == "revenue":
             metric_column = SalesFact.revenue
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    func.sum(metric_column).label("metric_value"),
+                )
+                .group_by(SalesFact.product_id)
+                .subquery()
+            )
+        elif metric == "promo_lift":
+            promo_avg = func.avg(case((SalesFact.promo_flag.is_(True), SalesFact.quantity), else_=None))
+            non_promo_avg = func.avg(case((SalesFact.promo_flag.is_(False), SalesFact.quantity), else_=None))
+            promo_count = func.sum(case((SalesFact.promo_flag.is_(True), 1), else_=0))
+            non_promo_count = func.sum(case((SalesFact.promo_flag.is_(False), 1), else_=0))
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    (((promo_avg - non_promo_avg) / func.nullif(non_promo_avg, 0.0)) * 100.0).label("metric_value"),
+                )
+                .group_by(SalesFact.product_id)
+                .having(promo_count > 0)
+                .having(non_promo_count > 0)
+                .having(non_promo_avg != 0)
+                .subquery()
+            )
         else:
             raise ValueError(f"Unsupported metric '{metric}'.")
-
-        grouped = (
-            select(
-                SalesFact.product_id.label("product_id"),
-                func.sum(metric_column).label("metric_value"),
-            )
-            .group_by(SalesFact.product_id)
-            .subquery()
-        )
         aggregate_fn = func.max if direction == "desc" else func.min if direction == "asc" else None
         if aggregate_fn is None:
             raise ValueError(f"Unsupported direction '{direction}'.")

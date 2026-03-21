@@ -168,7 +168,9 @@ async def test_ask_preset_returns_cached_answer():
         "citations": [{"source": "x.txt"}],
         "used_tools": [],
     }
-    with patch("app.assistants.service.assistant_cache") as mock_cache:
+    with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service:
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_cache.get = AsyncMock(return_value=cached_payload)
         result = await ask_preset("knowledge", "k_001", "en")
 
@@ -180,9 +182,11 @@ async def test_ask_preset_returns_cached_answer():
 @pytest.mark.asyncio
 async def test_ask_preset_generates_and_caches_on_miss():
     with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
         mock_cache.get = AsyncMock(return_value=None)
         mock_cache.set = AsyncMock()
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_gen.return_value = ("fresh answer", [], [])
 
         result = await ask_preset("knowledge", "k_001", "cs")
@@ -191,6 +195,28 @@ async def test_ask_preset_generates_and_caches_on_miss():
     assert result.answer == "fresh answer"
     assert result.locale == "cs"
     mock_cache.set.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_ask_preset_uses_deterministic_facts_before_llm():
+    deterministic_answer = MagicMock(
+        cached=False,
+        answer="Produkt, který nejvíce těží z akcí, je P0001 (+12.9%).",
+        citations=[],
+        used_tools=[],
+    )
+    with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_cache.get = AsyncMock(return_value=None)
+        mock_cache.set = AsyncMock()
+        mock_facts_service.try_answer = AsyncMock(return_value=deterministic_answer)
+
+        result = await ask_preset("knowledge", "k_005", "cs")
+
+    assert result.answer == "Produkt, který nejvíce těží z akcí, je P0001 (+12.9%)."
+    assert result.question_id == "k_005"
+    mock_gen.assert_not_called()
 
 
 @pytest.mark.asyncio

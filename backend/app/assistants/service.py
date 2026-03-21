@@ -320,6 +320,43 @@ async def ask_preset(
             },
         )
 
+    deterministic_answer = await deterministic_facts_service.try_answer(
+        assistant_type=assistant_type,
+        query=query_en,
+        locale=locale,
+        forecasting_repo=forecasting_repo,
+        trace=trace,
+    )
+    if deterministic_answer is not None:
+        citations_raw = [citation.model_dump(mode="json") for citation in deterministic_answer.citations]
+        used_tools = deterministic_answer.used_tools
+        answer = deterministic_answer.answer
+        await assistant_cache.set(
+            assistant_type,
+            question_id,
+            {"answer": answer, "citations": citations_raw, "used_tools": used_tools},
+            locale=locale,
+        )
+        if trace:
+            trace.add_step(
+                "preset_cache_store",
+                {
+                    "assistant_type": assistant_type,
+                    "question_id": question_id,
+                    "locale": locale,
+                    "source": "deterministic_facts",
+                },
+            )
+        return AssistantAnswer(
+            question_id=question_id,
+            query=preset.text(locale),
+            answer=answer,
+            locale=locale,
+            cached=bool(deterministic_answer.cached),
+            citations=[Citation(**c) for c in citations_raw],
+            used_tools=used_tools,
+        )
+
     # 1. Cache check (locale-aware)
     cached = await assistant_cache.get(assistant_type, question_id, locale)
     if trace:

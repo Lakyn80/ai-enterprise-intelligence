@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 FactEntity = Literal["product"]
 FactOperation = Literal["rank"]
-FactMetric = Literal["quantity", "revenue"]
+FactMetric = Literal["quantity", "revenue", "promo_lift"]
 FactDirection = Literal["desc", "asc"]
 
 
