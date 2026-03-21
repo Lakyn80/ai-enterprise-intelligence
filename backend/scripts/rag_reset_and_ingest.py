@@ -1,36 +1,18 @@
 #!/usr/bin/env python3
-"""Reset RAG store a pře-ingest dokumentů s novými embeddings."""
+"""Reset active RAG store and re-ingest documents with current backend."""
 import asyncio
-import shutil
-from pathlib import Path
 
-from app.knowledge_rag.ingest.embeddings import get_embedding_provider
 from app.knowledge_rag.ingest.loaders import load_documents_from_path
 from app.knowledge_rag.ingest.chunking import chunk_text
 from app.knowledge_rag.service import get_vector_store
 
 
-def reset_store():
-    """Smazat Chroma collection a faiss_index."""
-    from app.settings import settings
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
-
-    removed = []
-    try:
-        client = chromadb.PersistentClient(
-            path=settings.rag_chroma_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        client.delete_collection(settings.rag_collection_name)
-        removed.append("chroma_collection")
-    except Exception:
-        pass
-    faiss_path = Path("./faiss_index")
-    if faiss_path.exists():
-        shutil.rmtree(faiss_path)
-        removed.append("faiss_index")
-    return removed
+async def reset_store():
+    """Reset whichever RAG backend is currently active."""
+    store = get_vector_store()
+    if not store:
+        return []
+    return await store.reset()
 
 
 async def ingest_folder(folder_path: str):
@@ -52,7 +34,7 @@ async def ingest_folder(folder_path: str):
 
 def main():
     print("1. Reset RAG store...")
-    removed = reset_store()
+    removed = asyncio.run(reset_store())
     print(f"   Odstraněno: {removed or 'nic (už byl prázdný)'}")
 
     print("2. Ingest dokumentů z /data/knowledge...")

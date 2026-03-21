@@ -12,16 +12,28 @@ from app.knowledge_rag.vectorstores.base import VectorStore
 from app.settings import settings
 
 
-def get_vector_store() -> VectorStore | None:
+def create_vector_store(vectorstore_name: str | None = None) -> VectorStore | None:
     """Create vector store based on settings."""
     if not settings.rag_enabled:
         return None
     emb = get_embedding_provider()
-    if settings.vectorstore == "faiss":
+    selected = (vectorstore_name or settings.vectorstore).lower().strip()
+    if selected == "faiss":
         from app.knowledge_rag.vectorstores.faiss_store import FAISSVectorStore
+
         return FAISSVectorStore(emb)
+    if selected == "qdrant":
+        from app.knowledge_rag.vectorstores.qdrant_store import QdrantVectorStore
+
+        return QdrantVectorStore(emb)
     from app.knowledge_rag.vectorstores.chroma_store import ChromaVectorStore
+
     return ChromaVectorStore(emb)
+
+
+def get_vector_store() -> VectorStore | None:
+    """Create active vector store based on current settings."""
+    return create_vector_store()
 
 
 class KnowledgeService:

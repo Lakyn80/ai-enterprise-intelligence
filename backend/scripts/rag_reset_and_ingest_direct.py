@@ -1,32 +1,21 @@
 #!/usr/bin/env python3
-"""Reset RAG a ingest - volá funkce přímo (bez HTTP)."""
+"""Reset active RAG backend and ingest directly without HTTP."""
 import asyncio
 import sys
-from pathlib import Path
 
 # Přidat /app do path
 sys.path.insert(0, "/app")
 
-from app.settings import settings
 from app.knowledge_rag.service import get_vector_store
 from app.knowledge_rag.ingest.loaders import load_documents_from_path
 from app.knowledge_rag.ingest.chunking import chunk_text
-import chromadb
-from chromadb.config import Settings as ChromaSettings
 
 
-def reset_store():
-    removed = []
-    try:
-        client = chromadb.PersistentClient(
-            path=settings.rag_chroma_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        client.delete_collection(settings.rag_collection_name)
-        removed.append("chroma_collection")
-    except Exception:
-        pass
-    return removed
+async def reset_store():
+    store = get_vector_store()
+    if not store:
+        return []
+    return await store.reset()
 
 
 async def ingest_folder(folder_path: str):
@@ -46,7 +35,7 @@ async def ingest_folder(folder_path: str):
 
 def main():
     print("1. Reset RAG store...")
-    removed = reset_store()
+    removed = asyncio.run(reset_store())
     print(f"   Odstraněno: {removed or 'nic'}")
 
     print("2. Ingest z /data/knowledge...")

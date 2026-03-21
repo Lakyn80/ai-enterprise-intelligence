@@ -94,3 +94,16 @@ class FAISSVectorStore(VectorStore):
                 if len(results) == k:
                     break
         return results
+
+    async def reset(self) -> list[str]:
+        removed: list[str] = []
+        if self._path.exists():
+            import shutil
+
+            shutil.rmtree(self._path)
+            removed.append("faiss_index")
+        self._index = None
+        self._documents = []
+        self._metadatas = []
+        self._ids = []
+        return removed

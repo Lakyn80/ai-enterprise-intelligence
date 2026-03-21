@@ -17,28 +17,8 @@ def get_knowledge_service() -> KnowledgeService:
 @router.post("/knowledge/reset", dependencies=[Depends(verify_api_key)])
 async def reset_rag_store():
     """Smazat RAG vektorový index (pro pře-ingest s novými embeddings)."""
-    import shutil
-    from pathlib import Path
-
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
-
-    from app.settings import settings
-
-    removed = []
-    try:
-        client = chromadb.PersistentClient(
-            path=settings.rag_chroma_path,
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        client.delete_collection(settings.rag_collection_name)
-        removed.append("chroma_collection")
-    except Exception:
-        pass
-    faiss_path = Path("./faiss_index")
-    if faiss_path.exists():
-        shutil.rmtree(faiss_path)
-        removed.append("faiss_index")
+    store = get_knowledge_service()._store
+    removed = await store.reset() if store else []
     return {"status": "ok", "message": "RAG store resetován", "removed": removed}
 
 

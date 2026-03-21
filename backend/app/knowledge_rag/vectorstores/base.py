@@ -30,3 +30,8 @@ class VectorStore(ABC):
             where: Optional metadata filter (ChromaDB-style), e.g. {"report_type": "category"}.
         """
         ...
+
+    @abstractmethod
+    async def reset(self) -> list[str]:
+        """Reset the active vector store and return removed resource names."""
+        ...

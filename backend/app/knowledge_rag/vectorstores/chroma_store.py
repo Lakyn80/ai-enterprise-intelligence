@@ -84,3 +84,12 @@ class ChromaVectorStore(VectorStore):
             {"content": doc, "metadata": meta}
             for doc, meta in zip(docs, metas)
         ]
+
+    async def reset(self) -> list[str]:
+        removed: list[str] = []
+        try:
+            self._client.delete_collection(settings.rag_collection_name)
+            removed.append("chroma_collection")
+        except Exception:
+            pass
+        return removed

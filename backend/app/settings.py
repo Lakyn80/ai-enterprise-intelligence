@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     assistants_cache_ttl: int = 0
     assistants_deterministic_facts_enabled: bool = True
     assistants_semantic_cache_enabled: bool = True
+    assistants_semantic_cache_backend: str = "chroma"
     assistants_semantic_cache_collection_name: str = "assistants_query_cache"
     assistants_semantic_cache_reuse_similarity: float = 0.90
     assistants_semantic_cache_rewrite_similarity: float = 0.30
@@ -40,6 +41,11 @@ class Settings(BaseSettings):
     embeddings_provider: str = "deepseek"  # deepseek | openai | local
     rag_collection_name: str = "retail_knowledge"
     rag_chroma_path: str = "./chroma_db"
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
+    qdrant_timeout: int = 10
+    qdrant_prefer_grpc: bool = False
+    qdrant_path: str = ""
 
     # Application
     log_level: str = "INFO"
