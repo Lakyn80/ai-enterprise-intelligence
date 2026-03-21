@@ -16,6 +16,7 @@ from app.assistants.schemas import (
     PresetsResponse,
 )
 from app.assistants import service
+from app.assistants.facts.service import UnsupportedDeterministicFactsQueryError
 from app.assistants.presets import get_preset_by_id
 from app.assistants.trace_recorder import AssistantTraceRecorder
 from app.assistants.trace_repository import assistant_trace_repository
@@ -346,6 +347,18 @@ async def ask_custom(
             forecasting_repo=repo,
             trace=trace,
         )
+    except UnsupportedDeterministicFactsQueryError as e:
+        if idempotency_key:
+            await idempotency_store.release_lock(idempotency_key)
+        trace.finalize_error(
+            error=str(e),
+            cache_source=trace.cache_source,
+            cache_strategy=trace.cache_strategy,
+            similarity=trace.similarity,
+            status="unsupported",
+        )
+        await _persist_trace(session, trace, commit=True)
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         if idempotency_key:
             await idempotency_store.release_lock(idempotency_key)

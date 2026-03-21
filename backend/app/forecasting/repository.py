@@ -125,6 +125,82 @@ class ForecastingRepository:
         )
         return [r[0] for r in result.all()]
 
+    async def get_sales_dataset_signature(self) -> dict[str, str | int | float | None]:
+        """Return a stable aggregate signature for sales_facts cache invalidation."""
+        from sqlalchemy import func
+
+        result = await self._session.execute(
+            select(
+                func.count(SalesFact.id),
+                func.coalesce(func.sum(SalesFact.quantity), 0.0),
+                func.coalesce(func.sum(SalesFact.revenue), 0.0),
+                func.min(SalesFact.date),
+                func.max(SalesFact.date),
+            )
+        )
+        row = result.one()
+        return {
+            "row_count": int(row[0] or 0),
+            "quantity_sum": round(float(row[1] or 0.0), 6),
+            "revenue_sum": round(float(row[2] or 0.0), 6),
+            "date_from": row[3].isoformat() if row[3] else None,
+            "date_to": row[4].isoformat() if row[4] else None,
+        }
+
+    async def get_product_rank_winners(
+        self,
+        *,
+        metric: str,
+        direction: str,
+        filters: dict | None = None,
+        date_range: None = None,
+        limit: int = 1,
+    ) -> list[dict[str, float | str]]:
+        """Return all tied winners for a supported top/bottom product query."""
+        from sqlalchemy import func
+
+        if filters:
+            raise ValueError("Product rank resolver does not support filters yet.")
+        if date_range is not None:
+            raise ValueError("Product rank resolver does not support date_range yet.")
+        if limit != 1:
+            raise ValueError("Product rank resolver supports only limit=1.")
+
+        if metric == "quantity":
+            metric_column = SalesFact.quantity
+        elif metric == "revenue":
+            metric_column = SalesFact.revenue
+        else:
+            raise ValueError(f"Unsupported metric '{metric}'.")
+
+        grouped = (
+            select(
+                SalesFact.product_id.label("product_id"),
+                func.sum(metric_column).label("metric_value"),
+            )
+            .group_by(SalesFact.product_id)
+            .subquery()
+        )
+        aggregate_fn = func.max if direction == "desc" else func.min if direction == "asc" else None
+        if aggregate_fn is None:
+            raise ValueError(f"Unsupported direction '{direction}'.")
+
+        extreme_result = await self._session.execute(select(aggregate_fn(grouped.c.metric_value)))
+        extreme_value = extreme_result.scalar_one_or_none()
+        if extreme_value is None:
+            return []
+
+        winners_result = await self._session.execute(
+            select(grouped.c.product_id, grouped.c.metric_value)
+            .where(grouped.c.metric_value == extreme_value)
+            .order_by(grouped.c.product_id.asc())
+        )
+        rows = winners_result.all()
+        return [
+            {"product_id": row.product_id, "value": float(row.metric_value)}
+            for row in rows
+        ]
+
     async def get_active_model_path(self) -> str | None:
         """Get file path of active model artifact."""
         q = select(ModelArtifact).where(ModelArtifact.is_active == True).limit(1)

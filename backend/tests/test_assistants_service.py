@@ -205,8 +205,10 @@ async def test_ask_preset_raises_for_unknown_id():
 
 @pytest.mark.asyncio
 async def test_ask_custom_no_cache():
-    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=None)
         mock_query_cache.set_exact = AsyncMock()
@@ -230,7 +232,9 @@ async def test_ask_custom_returns_exact_cached_answer():
         "citations": [{"source": "doc.txt"}],
         "used_tools": ["tool_x"],
     }
-    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache:
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache:
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=cached_payload)
 
         result = await ask_custom("knowledge", "what is revenue?", "en")
@@ -249,8 +253,10 @@ async def test_ask_custom_returns_semantic_cached_answer():
         "similarity": 0.97,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
         mock_query_cache.set_exact = AsyncMock()
@@ -282,12 +288,14 @@ async def test_ask_custom_rewrites_mid_similarity_cached_answer():
         "similarity": 0.62,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._call_semantic_rewrite", new_callable=AsyncMock) as mock_rewrite, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
          patch("app.assistants.service.settings.assistants_semantic_cache_reuse_similarity", 0.90), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_similarity", 0.30), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_enabled", True):
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
         mock_query_cache.set_exact = AsyncMock()
@@ -313,12 +321,14 @@ async def test_ask_custom_regenerates_when_rewrite_is_disabled():
         "similarity": 0.62,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._call_semantic_rewrite", new_callable=AsyncMock) as mock_rewrite, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
          patch("app.assistants.service.settings.assistants_semantic_cache_reuse_similarity", 0.90), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_similarity", 0.30), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_enabled", False):
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
         mock_query_cache.set_exact = AsyncMock()
@@ -331,3 +341,21 @@ async def test_ask_custom_regenerates_when_rewrite_is_disabled():
     assert result.answer == "fresh answer"
     mock_rewrite.assert_not_called()
     mock_gen.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_deterministic_facts_answer_before_free_text_cache():
+    deterministic_answer = MagicMock(
+        cached=True,
+        answer="Nejprodávanější produkt podle počtu kusů je P0001 (25 ks).",
+    )
+    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_facts_service.try_answer = AsyncMock(return_value=deterministic_answer)
+
+        result = await ask_custom("knowledge", "Který produkt se prodává nejvíc?", "cs")
+
+    assert result is deterministic_answer
+    mock_query_cache.get_exact.assert_not_called()
+    mock_gen.assert_not_called()

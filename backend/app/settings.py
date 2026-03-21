@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6380/0"
     assistants_cache_ttl: int = 0
+    assistants_deterministic_facts_enabled: bool = True
     assistants_semantic_cache_enabled: bool = True
     assistants_semantic_cache_collection_name: str = "assistants_query_cache"
     assistants_semantic_cache_reuse_similarity: float = 0.90

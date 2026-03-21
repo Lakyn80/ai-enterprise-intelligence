@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.assistants.cache import assistant_cache
 from app.assistants.dlq import dlq
+from app.assistants.facts.service import deterministic_facts_service
 from app.assistants.query_cache import assistant_query_cache
 from app.assistants.presets import AssistantType, Locale, get_preset_by_id, get_presets
 from app.assistants.retry import build_retry
@@ -394,6 +395,16 @@ async def ask_custom(
     forecasting_repo: Any = None,
     trace: "AssistantTraceRecorder | None" = None,
 ) -> AssistantAnswer:
+    deterministic_answer = await deterministic_facts_service.try_answer(
+        assistant_type=assistant_type,
+        query=query,
+        locale=locale,
+        forecasting_repo=forecasting_repo,
+        trace=trace,
+    )
+    if deterministic_answer is not None:
+        return deterministic_answer
+
     exact_cached = await assistant_query_cache.get_exact(assistant_type, query, locale)
     if trace:
         trace.add_step(
