@@ -14,10 +14,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.assistants.cache import assistant_cache
+from app.assistants.date_range_service import deterministic_date_range_service
 from app.assistants.dlq import dlq
 from app.assistants.facts.service import deterministic_facts_service
 from app.assistants.query_cache import assistant_query_cache
-from app.assistants.presets import AssistantType, Locale, get_preset_by_id, get_presets
+from app.assistants.presets import AssistantType, Locale, find_preset_by_text, get_preset_by_id, get_presets
 from app.assistants.retry import build_retry
 from app.assistants.schemas import AssistantAnswer, Citation, PresetQuestionOut
 from app.assistants.semantic_policy import decide_semantic_cache_strategy
@@ -320,6 +321,42 @@ async def ask_preset(
             },
         )
 
+    date_range_answer = await deterministic_date_range_service.try_answer(
+        assistant_type=assistant_type,
+        query=query_en,
+        locale=locale,
+        forecasting_repo=forecasting_repo,
+        trace=trace,
+    )
+    if date_range_answer is not None:
+        citations_raw = [citation.model_dump(mode="json") for citation in date_range_answer.citations]
+        used_tools = date_range_answer.used_tools
+        answer = date_range_answer.answer
+        await assistant_cache.set(
+            assistant_type,
+            question_id,
+            {"answer": answer, "citations": citations_raw, "used_tools": used_tools},
+            locale=locale,
+        )
+        if trace:
+            trace.add_step(
+                "preset_cache_store",
+                {
+                    "assistant_type": assistant_type,
+                    "question_id": question_id,
+                    "locale": locale,
+                    "source": "deterministic_date_range",
+                },
+            )
+        return AssistantAnswer(
+            question_id=question_id,
+            query=preset.text(locale),
+            answer=answer,
+            locale=locale,
+            cached=bool(date_range_answer.cached),
+            citations=[Citation(**c) for c in citations_raw],
+            used_tools=used_tools,
+        )
     deterministic_answer = await deterministic_facts_service.try_answer(
         assistant_type=assistant_type,
         query=query_en,
@@ -432,6 +469,38 @@ async def ask_custom(
     forecasting_repo: Any = None,
     trace: "AssistantTraceRecorder | None" = None,
 ) -> AssistantAnswer:
+    matched_preset = find_preset_by_text(assistant_type, query, locale)
+    if matched_preset is not None:
+        if trace:
+            trace.add_step(
+                "preset_text_match",
+                {
+                    "assistant_type": assistant_type,
+                    "locale": locale,
+                    "query": query,
+                    "question_id": matched_preset.id,
+                },
+            )
+        preset_answer = await ask_preset(
+            assistant_type=assistant_type,
+            question_id=matched_preset.id,
+            locale=locale,
+            forecasting_service=forecasting_service,
+            forecasting_repo=forecasting_repo,
+            trace=trace,
+        )
+        preset_answer.query = query
+        return preset_answer
+
+    date_range_answer = await deterministic_date_range_service.try_answer(
+        assistant_type=assistant_type,
+        query=query,
+        locale=locale,
+        forecasting_repo=forecasting_repo,
+        trace=trace,
+    )
+    if date_range_answer is not None:
+        return date_range_answer
     deterministic_answer = await deterministic_facts_service.try_answer(
         assistant_type=assistant_type,
         query=query,

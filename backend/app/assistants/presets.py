@@ -10,6 +10,8 @@ Each question has:
 
 from typing import Literal
 
+from app.assistants.query_normalization import normalise_query
+
 Locale = Literal["en", "cs", "sk", "ru"]
 AssistantType = Literal["knowledge", "analyst"]
 
@@ -447,4 +449,19 @@ def get_preset_by_id(assistant_type: AssistantType, question_id: str) -> PresetQ
     for q in PRESETS[assistant_type]:
         if q.id == question_id:
             return q
+    return None
+
+
+def find_preset_by_text(
+    assistant_type: AssistantType,
+    query: str,
+    locale: Locale,
+) -> PresetQuestion | None:
+    normalized_query = normalise_query(query)
+    if not normalized_query:
+        return None
+
+    for preset in PRESETS[assistant_type]:
+        if normalise_query(preset.text(locale)) == normalized_query:
+            return preset
     return None

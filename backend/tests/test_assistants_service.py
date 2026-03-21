@@ -57,6 +57,15 @@ def test_list_presets_all_locales_same_ids():
     assert ids_en == ids_cs == ids_sk == ids_ru
 
 
+def test_find_preset_by_exact_localized_text():
+    from app.assistants.presets import find_preset_by_text
+
+    preset = find_preset_by_text("knowledge", "Který produkt nejvíce těží z akcí?", "cs")
+
+    assert preset is not None
+    assert preset.id == "k_005"
+
+
 # ---------------------------------------------------------------------------
 # _normalise_citations
 # ---------------------------------------------------------------------------
@@ -182,10 +191,12 @@ async def test_ask_preset_returns_cached_answer():
 @pytest.mark.asyncio
 async def test_ask_preset_generates_and_caches_on_miss():
     with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
          patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
         mock_cache.get = AsyncMock(return_value=None)
         mock_cache.set = AsyncMock()
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_gen.return_value = ("fresh answer", [], [])
 
@@ -206,10 +217,12 @@ async def test_ask_preset_uses_deterministic_facts_before_llm():
         used_tools=[],
     )
     with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
          patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
         mock_cache.get = AsyncMock(return_value=None)
         mock_cache.set = AsyncMock()
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=deterministic_answer)
 
         result = await ask_preset("knowledge", "k_005", "cs")
@@ -231,9 +244,11 @@ async def test_ask_preset_raises_for_unknown_id():
 
 @pytest.mark.asyncio
 async def test_ask_custom_no_cache():
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=None)
@@ -258,8 +273,10 @@ async def test_ask_custom_returns_exact_cached_answer():
         "citations": [{"source": "doc.txt"}],
         "used_tools": ["tool_x"],
     }
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache:
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=cached_payload)
 
@@ -279,9 +296,11 @@ async def test_ask_custom_returns_semantic_cached_answer():
         "similarity": 0.97,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
@@ -314,13 +333,15 @@ async def test_ask_custom_rewrites_mid_similarity_cached_answer():
         "similarity": 0.62,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._call_semantic_rewrite", new_callable=AsyncMock) as mock_rewrite, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
          patch("app.assistants.service.settings.assistants_semantic_cache_reuse_similarity", 0.90), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_similarity", 0.30), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_enabled", True):
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
@@ -347,13 +368,15 @@ async def test_ask_custom_regenerates_when_rewrite_is_disabled():
         "similarity": 0.62,
         "cached_query": "what is revenue?",
     }
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._call_semantic_rewrite", new_callable=AsyncMock) as mock_rewrite, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
          patch("app.assistants.service.settings.assistants_semantic_cache_reuse_similarity", 0.90), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_similarity", 0.30), \
          patch("app.assistants.service.settings.assistants_semantic_cache_rewrite_enabled", False):
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=None)
         mock_query_cache.get_exact = AsyncMock(return_value=None)
         mock_query_cache.get_semantic = AsyncMock(return_value=cached_payload)
@@ -375,13 +398,61 @@ async def test_ask_custom_returns_deterministic_facts_answer_before_free_text_ca
         cached=True,
         answer="Nejprodávanější produkt podle počtu kusů je P0001 (25 ks).",
     )
-    with patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
          patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
          patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
         mock_facts_service.try_answer = AsyncMock(return_value=deterministic_answer)
 
         result = await ask_custom("knowledge", "Který produkt se prodává nejvíc?", "cs")
 
     assert result is deterministic_answer
+    mock_query_cache.get_exact.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_routes_exact_preset_text_to_preset_cache():
+    cached_payload = {
+        "answer": "cached preset",
+        "citations": [{"source": "preset.txt"}],
+        "used_tools": [],
+    }
+    with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_cache.get = AsyncMock(return_value=cached_payload)
+        mock_date_range_service.try_answer = AsyncMock(return_value=None)
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
+
+        result = await ask_custom("knowledge", "Který produkt nejvíce těží z akcí?", "cs")
+
+    assert result.cached is True
+    assert result.answer == "cached preset"
+    assert result.question_id == "k_005"
+    mock_query_cache.get_exact.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_date_range_answer_before_free_text_cache():
+    date_range_answer = MagicMock(
+        cached=False,
+        answer="Prodejní data pokrývají období od 2022-01-01 do 2024-01-01.",
+    )
+    with patch("app.assistants.service.deterministic_date_range_service") as mock_date_range_service, \
+         patch("app.assistants.service.deterministic_facts_service") as mock_facts_service, \
+         patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_date_range_service.try_answer = AsyncMock(return_value=date_range_answer)
+        mock_facts_service.try_answer = AsyncMock(return_value=None)
+
+        result = await ask_custom("knowledge", "v jakém časovém rozmezí jsou prodejní data?", "cs")
+
+    assert result is date_range_answer
+    mock_facts_service.try_answer.assert_not_called()
     mock_query_cache.get_exact.assert_not_called()
     mock_gen.assert_not_called()

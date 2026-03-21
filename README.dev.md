@@ -160,11 +160,17 @@ web preset click
 ```text
 web custom question
 -> /api/assistants/ask-custom
--> deterministic facts route attempt
+-> deterministic route attempt
    -> if exact business fact supported:
       canonical spec
       spec hash + data fingerprint
       facts cache / DB resolver
+      stable renderer
+      return deterministic answer
+   -> if dataset date-range question supported:
+      intent matcher
+      data fingerprint
+      intent cache / DB resolver
       stable renderer
       return deterministic answer
 -> else:
@@ -195,6 +201,7 @@ question
 - bottom product by quantity
 - bottom product by revenue
 - top product by promo lift
+- sales data date range
 
 ### Why it exists
 - RAG should not decide exact rankings
@@ -678,6 +685,7 @@ Expected outcomes:
 - preset response returns `"cached": true`
 - deterministic facts responses return the same product for equivalent Czech paraphrases
 - repeated equivalent fact questions return `"cache_source":"deterministic_facts_cache"` in `trace_summary`
+- equivalent date-range questions return the same answer and then `"cache_source":"deterministic_date_range_cache"` in `trace_summary`
 
 ### Forecast
 - load forecast for `P0001`
