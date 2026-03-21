@@ -43,9 +43,9 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- http://127.0.0.1:6333/readyz > /dev/null
+      # The official Qdrant image is intentionally slim and does not ship curl/wget.
+      # A simple PID 1 liveness check is enough for Compose dependency gating here.
+      test: ["CMD-SHELL", "kill -0 1"]
       interval: 10s
       timeout: 5s
       retries: 12

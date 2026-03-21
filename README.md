@@ -1,6 +1,11 @@
 # AI Enterprise Intelligence — Developer README
 
-> Retail Forecast Platform: FastAPI + LightGBM + ChromaDB + Next.js
+> Retail Forecast Platform: FastAPI + LightGBM + Qdrant/Chroma + Next.js
+
+Current state note:
+- the active Docker runtime now uses `Qdrant`
+- `Chroma` is still kept as a supported fallback
+- the detailed current-state developer and ops guide lives in [README.dev.md](README.dev.md)
 
 ---
 
@@ -40,14 +45,14 @@
 │                                                          │
 │  ┌─────────────┐  ┌───────────────┐  ┌───────────────┐  │
 │  │ Forecasting │  │ AI Assistant  │  │  Knowledge    │  │
-│  │  (LightGBM) │  │  (DeepSeek)   │  │  RAG (Chroma) │  │
+│  │  (LightGBM) │  │  (DeepSeek)   │  │ RAG (Qdrant)  │  │
 │  └──────┬──────┘  └───────┬───────┘  └───────┬───────┘  │
 │         │                 │                  │           │
 │  ┌──────▼─────────────────▼──────────────────▼───────┐   │
 │  │       PostgreSQL  (sales_facts, model_artifacts)   │   │
 │  └────────────────────────────────────────────────── ┘   │
 │  ┌─────────────────────────────────────────────────── ┐   │
-│  │            ChromaDB (vector store, persisted)       │   │
+│  │     Qdrant / Chroma (vector store, persisted)       │   │
 │  └─────────────────────────────────────────────────── ┘   │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -59,7 +64,7 @@ Kaggle CSV → PostgreSQL (sales_facts) → LightGBM model → Forecast API → 
 
 **Data flow — Knowledge Assistant:**
 ```
-PostgreSQL → aggregation → text reports → chunking → ChromaDB → similarity search → DeepSeek LLM → answer
+PostgreSQL → aggregation → text reports → chunking → Qdrant/Chroma → similarity search → DeepSeek LLM → answer
 ```
 
 ---
@@ -154,7 +159,7 @@ ai-enterprise-intelligence/
 |---|---|
 | Backend API | FastAPI 0.110+ |
 | ML model | LightGBM (gradient boosted trees) |
-| Vector store | ChromaDB (default) / FAISS (optional) |
+| Vector store | Qdrant (active Docker runtime) / ChromaDB (fallback) / FAISS (optional) |
 | LLM | DeepSeek (default) / OpenAI (optional) |
 | Embeddings | DeepSeek `deepseek-embedding` / OpenAI `text-embedding-3-small` / Stub |
 | Agent framework | LangGraph |
@@ -189,10 +194,12 @@ OPENAI_API_KEY=sk-...           # Optional, only if EMBEDDINGS_PROVIDER=openai
 
 # === RAG / Vector store ===
 RAG_ENABLED=true
-VECTORSTORE=chroma              # chroma | faiss
+VECTORSTORE=qdrant              # qdrant | chroma | faiss
 EMBEDDINGS_PROVIDER=deepseek    # deepseek | openai | local (stub)
 RAG_COLLECTION_NAME=retail_knowledge
-RAG_CHROMA_PATH=./chroma_db     # Host path; Docker uses /app/chroma_db
+RAG_CHROMA_PATH=./chroma_db     # Kept for fallback / rollback
+QDRANT_URL=http://localhost:6333
+QDRANT_HOST_PORT=6333
 
 # === Application ===
 LOG_LEVEL=INFO
@@ -222,8 +229,15 @@ cp .env.example .env
 # 2. Start all services
 docker compose up -d --build
 
+# If host port 6333 is already used by another local Qdrant:
+# PowerShell:
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build
+
 # 3. Check services are healthy
 docker compose ps
+curl http://localhost:8001/api/health
+curl http://localhost:6333/readyz
 
 # 4. (Optional) Load Kaggle data
 .\scripts\download-kaggle-data.ps1   # Windows
@@ -242,7 +256,26 @@ curl -X POST http://localhost:8001/api/knowledge/ingest-reports \
   -H "X-Api-Key: dev-admin-key-change-in-production"
 
 # 8. Warm all 40 preset Q&A into Redis and translate demo locales
-docker compose run --rm cache-warmup
+docker compose --profile tools run --rm cache-warmup
+```
+
+Recommended local bootstrap order:
+```bash
+docker compose up -d --build
+docker compose exec -T backend alembic upgrade head
+curl -X POST http://localhost:8001/api/admin/train \
+  -H "X-Api-Key: dev-admin-key-change-in-production"
+curl -X POST http://localhost:8001/api/knowledge/ingest-reports \
+  -H "X-Api-Key: dev-admin-key-change-in-production"
+docker compose --profile tools run --rm cache-warmup
+```
+
+If you override `QDRANT_HOST_PORT`, use the same env var for every Compose command in that shell:
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build
+docker compose exec -T backend alembic upgrade head
+docker compose --profile tools run --rm cache-warmup
 ```
 
 | Service | URL |
@@ -252,12 +285,14 @@ docker compose run --rm cache-warmup
 | API Docs (Swagger) | http://localhost:8001/docs |
 | PostgreSQL | internal container only |
 | Redis | internal container only |
+| Qdrant dashboard | http://localhost:6333/dashboard |
 
 Preset cache notes:
-- `docker compose run --rm cache-warmup` fills all 20 `knowledge` + 20 `analyst` preset answers in English and translates them to `cs/sk/ru`.
+- `docker compose --profile tools run --rm cache-warmup` fills all 20 `knowledge` + 20 `analyst` preset answers in English and translates them to `cs/sk/ru`.
 - Preset answers are stored in Redis without expiry by default (`ASSISTANTS_CACHE_TTL=0`).
 - Redis survives restart because both local and production compose files now persist `/data` in the `redis_data` Docker volume.
 - Data is deleted only by `docker compose down -v` or explicit cache flush.
+- Qdrant state survives restart via the `qdrant_data` Docker volume.
 
 ---
 

@@ -356,6 +356,25 @@ docker compose up -d --build
 docker compose ps
 ```
 
+### If port 6333 is already occupied
+
+Use a different host port for Qdrant and keep that same env var for every Compose command in the shell session.
+
+PowerShell:
+
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build
+docker compose ps
+curl http://localhost:8001/api/health
+curl http://localhost:6337/readyz
+```
+
+Why this matters:
+- the container still listens on `6333`
+- only the host-side port changes
+- `docker compose --profile tools run --rm cache-warmup` must use the same `QDRANT_HOST_PORT`
+
 ### URLs
 - Frontend: `http://localhost:4000`
 - Backend: `http://localhost:8001`
@@ -393,11 +412,30 @@ curl -X POST http://localhost:8001/api/knowledge/ingest-reports -H "X-Api-Key: $
 docker compose --profile tools run --rm cache-warmup
 ```
 
+PowerShell variant with the admin key read from the running backend container:
+
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build
+docker compose exec -T backend alembic upgrade head
+$apiKey = (docker compose exec -T backend printenv API_KEY_ADMIN).Trim()
+curl.exe -fsS http://localhost:8001/api/health
+curl.exe -fsS http://localhost:6337/readyz
+curl.exe -fsS -X POST http://localhost:8001/api/admin/train -H "X-Api-Key: $apiKey"
+curl.exe -fsS -X POST http://localhost:8001/api/knowledge/ingest-reports -H "X-Api-Key: $apiKey"
+docker compose --profile tools run --rm cache-warmup
+```
+
 ### What each step does
 - `alembic upgrade head`: DB schema, including trace tables
 - `train`: creates active forecasting model artifact
 - `ingest-reports`: generates product/category reports and stores vectors
 - `cache-warmup`: warms 40 preset questions and locale variants
+
+### Qdrant-specific note
+- the official `qdrant/qdrant` image is slim and does not include `curl` or `wget`
+- local and production Compose healthchecks therefore use a PID 1 liveness check instead of HTTP probing inside the container
+- external smoke tests should still verify `http://localhost:<QDRANT_HOST_PORT>/readyz`
 
 ## 11. Production Deploy Model
 
@@ -611,6 +649,33 @@ python -m scripts.rag_reset_and_ingest
 5. Push only after local smoke test.
 
 ## 20. Smoke Test Checklist
+
+### Exact local smoke test that was verified
+
+PowerShell:
+
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build
+docker compose exec -T backend alembic upgrade head
+curl.exe -fsS http://localhost:8001/api/health
+curl.exe -fsS http://localhost:6337/readyz
+$apiKey = (docker compose exec -T backend printenv API_KEY_ADMIN).Trim()
+curl.exe -fsS -X POST http://localhost:8001/api/admin/train -H "X-Api-Key: $apiKey"
+curl.exe -fsS -X POST http://localhost:8001/api/knowledge/ingest-reports -H "X-Api-Key: $apiKey"
+docker compose --profile tools run --rm cache-warmup
+docker compose exec -T redis redis-cli DBSIZE
+curl.exe -fsS -X POST http://localhost:8001/api/assistants/ask-preset -H "Content-Type: application/json" -d '{"assistant_type":"knowledge","question_id":"k_001","locale":"cs"}'
+curl.exe -fsS -X POST http://localhost:8001/api/assistants/ask-custom -H "Content-Type: application/json" -d '{"assistant_type":"knowledge","query":"Který produkt se prodává nejvíc?","locale":"cs"}'
+curl.exe -fsS -X POST http://localhost:8001/api/assistants/ask-custom -H "Content-Type: application/json" -d '{"assistant_type":"knowledge","query":"Jaký je nejprodávanější produkt?","locale":"cs"}'
+```
+
+Expected outcomes:
+- backend health returns `status=ok`
+- Qdrant `readyz` returns `all shards are ready`
+- preset response returns `"cached": true`
+- deterministic facts responses return the same product for equivalent Czech paraphrases
+- repeated equivalent fact questions return `"cache_source":"deterministic_facts_cache"` in `trace_summary`
 
 ### Forecast
 - load forecast for `P0001`
