@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from typing import TYPE_CHECKING, Any
 
@@ -19,21 +20,47 @@ _INTENT_NAME = "date_range_of_data"
 _RANGE_TERMS = (
     "date range",
     "time range",
+    "casovy rozsah",
     "casov",
     "rozsah",
     "rozmez",
     "od kdy do kdy",
+    "od kdy",
+    "do kdy",
+    "v jakem obdobi",
+    "jake obdobi",
     "pokryvaji",
     "cover",
+    "диапазон дат",
+    "временной диапазон",
+    "период",
+    "охватывают",
+    "охватывает",
 )
 _DATA_TERMS = (
     "sales data",
     "prodejni data",
     "predajne data",
+    "data prodeje",
+    "data predaje",
     "prodejnich dat",
     "predajnych dat",
+    "dat prodeje",
+    "dat predaje",
     "data o prodej",
     "data o predaj",
+    "данные о продажах",
+    "данные продаж",
+)
+_GENERIC_DATA_TERMS = (
+    "jsou data",
+    "maji data",
+    "data jsou",
+)
+_TRAILING_NOISE_SUFFIXES = (
+    " v tomto reportu",
+    " v reportu",
+    " v datech",
 )
 
 
@@ -152,9 +179,27 @@ def _normalize_for_matching(query: str) -> str:
 def _is_date_range_query(normalized: str) -> bool:
     if not normalized:
         return False
-    return any(term in normalized for term in _RANGE_TERMS) and any(
-        term in normalized for term in _DATA_TERMS
+    canonical = _canonicalize_date_range_query(normalized)
+    return any(term in canonical for term in _RANGE_TERMS) and (
+        any(term in canonical for term in _DATA_TERMS)
+        or any(term in canonical for term in _GENERIC_DATA_TERMS)
     )
+
+
+def _canonicalize_date_range_query(normalized: str) -> str:
+    canonical = re.sub(r"\bodkdy\b", "od kdy", normalized)
+    canonical = re.sub(r"\bdokdy\b", "do kdy", canonical)
+    canonical = re.sub(r"\s+", " ", canonical).strip()
+
+    changed = True
+    while changed:
+        changed = False
+        for suffix in _TRAILING_NOISE_SUFFIXES:
+            if canonical.endswith(suffix):
+                canonical = canonical[: -len(suffix)].rstrip()
+                changed = True
+
+    return canonical
 
 
 def _render_answer(locale: str, date_from: str, date_to: str) -> str:

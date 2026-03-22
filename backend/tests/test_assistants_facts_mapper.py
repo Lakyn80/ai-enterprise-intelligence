@@ -16,6 +16,7 @@ TOP_QUANTITY_PARAPHRASES = [
     "What is the best selling product?",
     "Top product by quantity?",
     "Which product is the most sold?",
+    "Какой продукт продается больше всего?",
 ]
 
 TOP_REVENUE_PARAPHRASES = [
@@ -29,6 +30,7 @@ TOP_REVENUE_PARAPHRASES = [
     "Top product by revenue?",
     "What product makes the most revenue?",
     "Which product earns the most revenue?",
+    "Какой продукт имеет самую высокую выручку?",
 ]
 
 BOTTOM_QUANTITY_PARAPHRASES = [
@@ -42,6 +44,7 @@ BOTTOM_QUANTITY_PARAPHRASES = [
     "Least selling product?",
     "Bottom product by quantity?",
     "Which product is sold the least?",
+    "Какой продукт продается меньше всего?",
 ]
 
 BOTTOM_REVENUE_PARAPHRASES = [
@@ -55,6 +58,7 @@ BOTTOM_REVENUE_PARAPHRASES = [
     "Bottom product by revenue?",
     "What product makes the least revenue?",
     "Which product earns the least revenue?",
+    "Какой продукт имеет самую низкую выручку?",
 ]
 
 TOP_PROMO_LIFT_PARAPHRASES = [
@@ -62,10 +66,14 @@ TOP_PROMO_LIFT_PARAPHRASES = [
     "Který produkt nejvíce těží z promo akcí?",
     "Který produkt má nejvyšší promo efekt?",
     "Který produkt má nejvyšší promo lift?",
+    "Co nejvíce těží z akcí?",
     "Ktery produkt nejvice tezi z akci",
     "Which product benefits the most from promotions?",
+    "What benefits the most from promotions?",
     "Which product gains the most from promotions?",
     "Which product has the highest promo lift?",
+    "Какой продукт получает наибольшую выгоду от акций?",
+    "Что больше всего выигрывает от акций?",
 ]
 
 TOP_AVG_PRICE_PARAPHRASES = [
@@ -74,6 +82,7 @@ TOP_AVG_PRICE_PARAPHRASES = [
     "Ktery produkt ma nejvyssi prumernou prodejni cenu",
     "Which product has the highest average selling price?",
     "Which product has the highest average price?",
+    "Какой продукт имеет самую высокую среднюю цену продажи?",
 ]
 
 

@@ -246,6 +246,55 @@ class ForecastingRepository:
             for row in rows
         ]
 
+    async def get_product_ranked_list(
+        self,
+        *,
+        metric: str,
+        direction: str,
+        limit: int = 5,
+    ) -> list[dict[str, float | str]]:
+        """Return a stable top/bottom product ranking list for supported aggregate metrics."""
+        from sqlalchemy import func
+
+        if limit <= 0:
+            raise ValueError("Product ranking list requires limit > 0.")
+
+        if metric == "quantity":
+            metric_column = SalesFact.quantity
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    func.sum(metric_column).label("metric_value"),
+                )
+                .group_by(SalesFact.product_id)
+            )
+        elif metric == "revenue":
+            metric_column = SalesFact.revenue
+            grouped = (
+                select(
+                    SalesFact.product_id.label("product_id"),
+                    func.sum(metric_column).label("metric_value"),
+                )
+                .group_by(SalesFact.product_id)
+            )
+        else:
+            raise ValueError(f"Unsupported metric '{metric}' for ranking list.")
+
+        order_column = "metric_value"
+        if direction == "desc":
+            grouped = grouped.order_by(getattr(func, "sum")(metric_column).desc(), SalesFact.product_id.asc())
+        elif direction == "asc":
+            grouped = grouped.order_by(getattr(func, "sum")(metric_column).asc(), SalesFact.product_id.asc())
+        else:
+            raise ValueError(f"Unsupported direction '{direction}' for ranking list.")
+
+        result = await self._session.execute(grouped.limit(limit))
+        rows = result.all()
+        return [
+            {"product_id": row.product_id, "value": float(row.metric_value)}
+            for row in rows
+        ]
+
     async def get_active_model_path(self) -> str | None:
         """Get file path of active model artifact."""
         q = select(ModelArtifact).where(ModelArtifact.is_active == True).limit(1)

@@ -15,12 +15,17 @@ _PRODUCT_TERMS = (
     "produkty",
     "product",
     "products",
+    "продукт",
+    "продукта",
+    "продукты",
 )
 _UNSUPPORTED_ENTITY_TERMS = (
     "kategorie",
     "kategorii",
     "category",
     "categories",
+    "категория",
+    "категории",
 )
 _UNSUPPORTED_FILTER_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bv kategorii\b", "Category filters are not supported yet."),
@@ -39,6 +44,7 @@ _REVENUE_TERMS = (
     "trzby",
     "revenue",
     "utrzi",
+    "выручк",
 )
 _PROMO_LIFT_TERMS = (
     "promo lift",
@@ -57,6 +63,12 @@ _PROMO_LIFT_TERMS = (
     "profits from promotions",
     "benefit most from promotions",
     "most from promotions",
+    "выгоду от акции",
+    "выгоду от акций",
+    "выигрывает от акции",
+    "выигрывает от акций",
+    "промо эффект",
+    "промо-эффект",
 )
 _AVG_PRICE_TERMS = (
     "prumernou prodejni cenu",
@@ -64,6 +76,9 @@ _AVG_PRICE_TERMS = (
     "average selling price",
     "average sale price",
     "average price",
+    "среднюю цену продажи",
+    "средняя цена продажи",
+    "цену продажи",
 )
 _QUANTITY_TERMS = (
     "nejprodavanejsi",
@@ -84,6 +99,13 @@ _QUANTITY_TERMS = (
     "pocet prodanych kusu",
     "prodanych kusu",
     "pocet kusu",
+    "продается больше всего",
+    "продается меньше всего",
+    "самый продаваемый",
+    "наиболее продаваемый",
+    "количество",
+    "количеству",
+    "объем продаж",
 )
 _DESC_TERMS = (
     "nejprodavanejsi",
@@ -95,6 +117,10 @@ _DESC_TERMS = (
     "best",
     "most",
     "highest",
+    "больше всего",
+    "наибольш",
+    "самый высокий",
+    "самую высок",
 )
 _ASC_TERMS = (
     "nejmene",
@@ -105,6 +131,10 @@ _ASC_TERMS = (
     "least",
     "lowest",
     "worst",
+    "меньше всего",
+    "наимень",
+    "самый низкий",
+    "самую низ",
 )
 
 
@@ -144,7 +174,7 @@ def map_fact_query(query: str) -> FactQueryMapping:
             unsupported_reason="Only product ranking questions are supported in deterministic facts v1.",
         )
 
-    if not mentions_product:
+    if not mentions_product and not _can_imply_default_product_entity(metric, direction):
         return FactQueryMapping(matched=False, normalized_query=normalized)
 
     return FactQueryMapping(
@@ -180,6 +210,15 @@ def _resolve_direction(normalized: str) -> FactDirection | None:
     if any(term in normalized for term in _DESC_TERMS):
         return "desc"
     return None
+
+
+def _can_imply_default_product_entity(
+    metric: FactMetric,
+    direction: FactDirection | None,
+) -> bool:
+    # In the current deterministic facts domain, top promo-lift phrasings such as
+    # "co nejvíce těží z akcí?" still unambiguously ask for the top product.
+    return metric == "promo_lift" and direction == "desc"
 
 
 def _normalize_for_matching(query: str) -> str:

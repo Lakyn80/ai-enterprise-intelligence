@@ -213,3 +213,37 @@ async def test_deterministic_facts_service_resolves_average_price_stably():
 
     assert result is not None
     assert result.answer == "Produkt s nejvyšší průměrnou prodejní cenou je P0002 (49.90)."
+
+
+@pytest.mark.asyncio
+async def test_deterministic_facts_service_resolves_russian_top_quantity_stably():
+    with patch("app.assistants.facts.service.deterministic_facts_cache") as mock_cache:
+        mock_cache.get = AsyncMock(return_value=None)
+        mock_cache.set = AsyncMock()
+
+        result = await deterministic_facts_service.try_answer(
+            assistant_type="knowledge",
+            query="Какой продукт продается больше всего?",
+            locale="ru",
+            forecasting_repo=FakeForecastingRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Самый продаваемый продукт по количеству штук: P0001 (25 шт.)."
+
+
+@pytest.mark.asyncio
+async def test_deterministic_facts_service_resolves_english_top_quantity_with_english_units():
+    with patch("app.assistants.facts.service.deterministic_facts_cache") as mock_cache:
+        mock_cache.get = AsyncMock(return_value=None)
+        mock_cache.set = AsyncMock()
+
+        result = await deterministic_facts_service.try_answer(
+            assistant_type="knowledge",
+            query="Which product sells the most?",
+            locale="en",
+            forecasting_repo=FakeForecastingRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Top product by quantity sold is P0001 (25 units)."

@@ -36,6 +36,18 @@ class Citation(BaseModel):
     excerpt: str | None = None
 
 
+class ClarificationMessage(BaseModel):
+    cs: str
+    ru: str
+    en: str
+
+
+class ClarificationOut(BaseModel):
+    type: Literal["clarification"] = "clarification"
+    missing: list[str]
+    message: ClarificationMessage
+
+
 class AssistantTraceSummary(BaseModel):
     trace_id: str
     status: str
@@ -74,6 +86,8 @@ class AssistantAnswer(BaseModel):
     query: str
     answer: str
     locale: Locale
+    response_type: Literal["answer", "clarification"] = "answer"
+    clarification: ClarificationOut | None = None
     cached: bool = False
     citations: list[Citation] = []
     used_tools: list[str] = []

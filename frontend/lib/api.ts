@@ -153,11 +153,25 @@ export interface Citation {
   excerpt?: string;
 }
 
+export interface ClarificationMessage {
+  cs: string;
+  ru: string;
+  en: string;
+}
+
+export interface Clarification {
+  type: "clarification";
+  missing: string[];
+  message: ClarificationMessage;
+}
+
 export interface AssistantAnswer {
   question_id: string | null;
   query: string;
   answer: string;
   locale: Locale;
+  response_type?: "answer" | "clarification";
+  clarification?: Clarification | null;
   cached: boolean;
   citations: Citation[];
   used_tools: string[];

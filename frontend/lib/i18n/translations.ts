@@ -112,6 +112,10 @@ const t = {
       traceDetails: "Execution trace",
       traceLoading: "Loading trace...",
       traceUnavailable: "Trace unavailable",
+      clarification: "clarification",
+      followUpHint: "You are continuing the previous clarification. A short reply will be sent as a follow-up.",
+      followUpBase: "Original question",
+      followUpClear: "Start new question",
     },
     common: {
       language: "Language",
@@ -231,6 +235,10 @@ const t = {
       traceDetails: "Trace provedení",
       traceLoading: "Načítám trace...",
       traceUnavailable: "Trace není dostupný",
+      clarification: "upřesnění",
+      followUpHint: "Navazuješ na předchozí upřesnění. Krátká odpověď se odešle jako pokračování.",
+      followUpBase: "Původní otázka",
+      followUpClear: "Začít novou otázku",
     },
     common: {
       language: "Jazyk",
@@ -350,6 +358,10 @@ const t = {
       traceDetails: "Trace vykonania",
       traceLoading: "Načítavam trace...",
       traceUnavailable: "Trace nie je dostupný",
+      clarification: "upresnenie",
+      followUpHint: "Nadväzuješ na predchádzajúce upresnenie. Krátka odpoveď sa odošle ako pokračovanie.",
+      followUpBase: "Pôvodná otázka",
+      followUpClear: "Začať novú otázku",
     },
     common: {
       language: "Jazyk",
@@ -469,6 +481,10 @@ const t = {
       traceDetails: "Трассировка выполнения",
       traceLoading: "Загрузка trace...",
       traceUnavailable: "Trace недоступен",
+      clarification: "уточнение",
+      followUpHint: "Вы продолжаете предыдущее уточнение. Короткий ответ будет отправлен как продолжение.",
+      followUpBase: "Исходный вопрос",
+      followUpClear: "Начать новый вопрос",
     },
     common: {
       language: "Язык",

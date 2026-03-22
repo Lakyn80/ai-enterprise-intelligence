@@ -36,19 +36,30 @@ async def test_date_range_service_returns_none_for_unrelated_query():
 
 
 @pytest.mark.asyncio
-async def test_date_range_service_resolves_czech_paraphrase():
+@pytest.mark.parametrize(
+    "query",
+    [
+        "v jakém časovém rozmezí jsou prodejní data?",
+        "odkdy dokdy jsou prodejní data?",
+        "odkdy dokdy jsou prodejní data v tomto reportu?",
+        "odkdy do kdy jsou data?",
+        "v jakém období jsou prodejní data?",
+        "jaký časový rozsah mají data?",
+    ],
+)
+async def test_date_range_service_resolves_czech_paraphrases(query: str):
     trace = AssistantTraceRecorder(
         assistant_type="knowledge",
         request_kind="custom",
         locale="cs",
-        user_query="v jakém časovém rozmezí jsou prodejní data?",
+        user_query=query,
     )
 
     with patch("app.assistants.date_range_service._get_cache", AsyncMock(return_value=None)), \
          patch("app.assistants.date_range_service._set_cache", AsyncMock()) as mock_set_cache:
         result = await deterministic_date_range_service.try_answer(
             assistant_type="knowledge",
-            query="v jakém časovém rozmezí jsou prodejní data?",
+            query=query,
             locale="cs",
             forecasting_repo=FakeDateRangeRepo(),
             trace=trace,
@@ -88,6 +99,48 @@ async def test_date_range_service_resolves_czech_data_o_prodejich_variant():
 
     assert result is not None
     assert result.answer == "Prodejní data pokrývají období od 2022-01-01 do 2024-01-01."
+
+
+@pytest.mark.asyncio
+async def test_date_range_service_resolves_czech_rozsah_dat_prodeje_variant():
+    with patch("app.assistants.date_range_service._get_cache", AsyncMock(return_value=None)), \
+         patch("app.assistants.date_range_service._set_cache", AsyncMock()):
+        result = await deterministic_date_range_service.try_answer(
+            assistant_type="knowledge",
+            query="Jaký je rozsah dat prodeje?",
+            locale="cs",
+            forecasting_repo=FakeDateRangeRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Prodejní data pokrývají období od 2022-01-01 do 2024-01-01."
+
+
+@pytest.mark.asyncio
+async def test_date_range_service_returns_none_for_non_range_report_question():
+    result = await deterministic_date_range_service.try_answer(
+        assistant_type="knowledge",
+        query="Shrň tento report.",
+        locale="cs",
+        forecasting_repo=FakeDateRangeRepo(),
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_date_range_service_resolves_russian_variant():
+    with patch("app.assistants.date_range_service._get_cache", AsyncMock(return_value=None)), \
+         patch("app.assistants.date_range_service._set_cache", AsyncMock()):
+        result = await deterministic_date_range_service.try_answer(
+            assistant_type="knowledge",
+            query="Какой диапазон дат покрывают данные о продажах?",
+            locale="ru",
+            forecasting_repo=FakeDateRangeRepo(),
+        )
+
+    assert result is not None
+    assert result.answer == "Данные о продажах охватывают период с 2022-01-01 по 2024-01-01."
 
 
 @pytest.mark.asyncio

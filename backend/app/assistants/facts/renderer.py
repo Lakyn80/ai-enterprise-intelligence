@@ -7,7 +7,7 @@ from app.assistants.facts.schemas import FactQuerySpec, FactResolveResult
 
 def render_fact_answer(spec: FactQuerySpec, result: FactResolveResult, locale: str) -> str:
     winner_ids = ", ".join(winner.product_id for winner in result.winners)
-    value = _format_metric_value(result.metric, result.winners[0].value)
+    value = _format_metric_value(result.metric, result.winners[0].value, locale)
     first_place = result.direction == "desc"
 
     if result.tie:
@@ -113,11 +113,16 @@ def _render_english(spec: FactQuerySpec, product_id: str, value: str) -> str:
     return f"Product with the lowest revenue is {product_id} ({value})."
 
 
-def _format_metric_value(metric: str, value: float) -> str:
+def _format_metric_value(metric: str, value: float, locale: str) -> str:
     if metric == "quantity":
+        unit = "ks"
+        if locale == "ru":
+            unit = "шт."
+        elif locale == "en":
+            unit = "units"
         if float(value).is_integer():
-            return f"{int(value)} ks"
-        return f"{value:.2f} ks"
+            return f"{int(value)} {unit}"
+        return f"{value:.2f} {unit}"
     if metric == "promo_lift":
         return f"{value:+.1f}%"
     return f"{value:.2f}"

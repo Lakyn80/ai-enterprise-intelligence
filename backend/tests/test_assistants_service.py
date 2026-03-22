@@ -11,6 +11,59 @@ from app.assistants.service import (
     ask_custom,
 )
 from app.assistants.presets import get_presets
+from app.assistants.trace_recorder import AssistantTraceRecorder
+
+
+class FakeAnalyticalRepo:
+    async def get_sales_dataset_signature(self):
+        return {
+            "row_count": 4,
+            "quantity_sum": 62.0,
+            "revenue_sum": 460.0,
+            "price_sum": 189.8,
+            "promo_row_count": 2,
+            "promo_quantity_sum": 29.0,
+            "date_from": "2022-01-01",
+            "date_to": "2024-01-01",
+        }
+
+    async def get_date_range(self):
+        return "2022-01-01", "2024-01-01"
+
+    async def get_product_ranked_list(self, *, metric, direction, limit=5):
+        assert metric in {"quantity", "revenue"}
+        assert direction == "desc"
+        assert limit == 5
+        if metric == "revenue":
+            return [
+                {"product_id": "P0100", "value": 2550.25},
+                {"product_id": "P0101", "value": 2440.10},
+                {"product_id": "P0102", "value": 2330.75},
+                {"product_id": "P0103", "value": 2220.50},
+                {"product_id": "P0104", "value": 2110.00},
+            ]
+        return [
+            {"product_id": "P0001", "value": 25.0},
+            {"product_id": "P0002", "value": 24.0},
+            {"product_id": "P0003", "value": 23.0},
+            {"product_id": "P0004", "value": 22.0},
+            {"product_id": "P0005", "value": 21.0},
+        ]
+
+    async def get_product_rank_winners(self, *, metric, direction, filters, date_range, limit):
+        assert direction in {"desc", "asc"}
+        assert filters == {}
+        assert date_range is None
+        assert limit == 1
+        winners = {
+            ("quantity", "desc"): [{"product_id": "P0001", "value": 25.0}],
+            ("quantity", "asc"): [{"product_id": "P0005", "value": 1.0}],
+            ("revenue", "desc"): [{"product_id": "P0100", "value": 2550.25}],
+            ("revenue", "asc"): [{"product_id": "P0104", "value": 110.0}],
+            ("promo_lift", "desc"): [{"product_id": "P0002", "value": 13.9}],
+            ("avg_price", "desc"): [{"product_id": "P0003", "value": 99.9}],
+        }
+        return winners[(metric, direction)]
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +466,48 @@ async def test_ask_custom_returns_deterministic_facts_answer_before_free_text_ca
 
 
 @pytest.mark.asyncio
+async def test_ask_custom_routes_promo_lift_paraphrase_to_same_deterministic_answer():
+    exact_trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="Který produkt nejvíce těží z akcí?",
+    )
+    paraphrase_trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="co nejvíce těží z akcí?",
+    )
+
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        exact = await ask_custom(
+            "knowledge",
+            "Který produkt nejvíce těží z akcí?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=exact_trace,
+        )
+        paraphrase = await ask_custom(
+            "knowledge",
+            "co nejvíce těží z akcí?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=paraphrase_trace,
+        )
+
+    assert exact.answer == "Produkt, který nejvíce těží z akcí, je P0002 (+13.9%)."
+    assert paraphrase.answer == exact.answer
+    assert any(step.step_name == "analytical_query_detected" for step in paraphrase_trace.steps)
+    assert any(step.step_name == "canonical_intent_matched" for step in paraphrase_trace.steps)
+    assert any(step.step_name == "deterministic_intent_selected" for step in paraphrase_trace.steps)
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_ask_custom_routes_exact_preset_text_to_preset_cache():
     cached_payload = {
         "answer": "cached preset",
@@ -455,4 +550,176 @@ async def test_ask_custom_returns_date_range_answer_before_free_text_cache():
     assert result is date_range_answer
     mock_facts_service.try_answer.assert_not_called()
     mock_query_cache.get_exact.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_routes_odkdy_dokdy_paraphrase_to_deterministic_date_range():
+    trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="odkdy dokdy jsou prodejní data v tomto reportu?",
+    )
+
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.date_range_service._get_cache", new_callable=AsyncMock) as mock_get_cache, \
+         patch("app.assistants.date_range_service._set_cache", new_callable=AsyncMock), \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        mock_get_cache.return_value = None
+        result = await ask_custom(
+            "knowledge",
+            "odkdy dokdy jsou prodejní data v tomto reportu?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=trace,
+        )
+
+    assert result.response_type == "answer"
+    assert result.answer == "Prodejní data pokrývají období od 2022-01-01 do 2024-01-01."
+    assert any(step.step_name == "analytical_query_detected" for step in trace.steps)
+    assert any(step.step_name == "canonical_intent_matched" for step in trace.steps)
+    assert any(step.step_name == "deterministic_intent_selected" for step in trace.steps)
+    assert trace.cache_source == "deterministic_date_range_resolver"
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_entity_clarification_for_analytical_query_without_entity():
+    trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="Co má nejvyšší tržby?",
+    )
+
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        result = await ask_custom(
+            "knowledge",
+            "Co má nejvyšší tržby?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=trace,
+        )
+
+    assert result.response_type == "clarification"
+    assert result.clarification is not None
+    assert result.clarification.missing == ["entity"]
+    assert "produkt, kategorii" in result.answer
+    assert any(step.step_name == "analytical_query_detected" for step in trace.steps)
+    assert any(step.step_name == "analytical_fallback_blocked" for step in trace.steps)
+    assert any(step.step_name == "clarification_returned" for step in trace.steps)
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_returns_clarification_before_cache_and_llm():
+    trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="jaké produkty maji nejvyšší prodej?",
+    )
+
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen:
+        result = await ask_custom(
+            "knowledge",
+            "jaké produkty maji nejvyšší prodej?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=trace,
+        )
+
+    assert result.response_type == "clarification"
+    assert result.clarification is not None
+    assert result.clarification.missing == ["metric"]
+    assert "počtu kusů" in result.answer
+    assert any(step.step_name == "canonical_intent_matched" for step in trace.steps)
+    assert any(step.step_name == "ambiguity_detected" for step in trace.steps)
+    assert any(step.step_name == "clarification_returned" for step in trace.steps)
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_routes_total_sales_paraphrase_to_deterministic_list():
+    trace = AssistantTraceRecorder(
+        assistant_type="knowledge",
+        request_kind="custom",
+        locale="cs",
+        user_query="Jaké produkty mají nejvyšší celkové prodeje?",
+    )
+
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
+         patch("app.assistants.service._get_deterministic_intent_cache", new_callable=AsyncMock) as mock_get_cache, \
+         patch("app.assistants.service._set_deterministic_intent_cache", new_callable=AsyncMock) as mock_set_cache:
+        mock_get_cache.return_value = None
+        result = await ask_custom(
+            "knowledge",
+            "Jaké produkty mají nejvyšší celkové prodeje?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+            trace=trace,
+        )
+
+    assert result.response_type == "answer"
+    assert result.answer.startswith("Produkty s nejvyššími celkovými prodeji jsou:")
+    assert "1. Produkt P0001: 25 ks" in result.answer
+    assert any(step.step_name == "canonical_intent_matched" for step in trace.steps)
+    assert any(step.step_name == "deterministic_list_intent_selected" for step in trace.steps)
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+    mock_set_cache.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ask_custom_routes_revenue_list_query_to_deterministic_list():
+    with patch("app.assistants.service.assistant_query_cache") as mock_query_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
+         patch("app.assistants.service._get_deterministic_intent_cache", new_callable=AsyncMock) as mock_get_cache, \
+         patch("app.assistants.service._set_deterministic_intent_cache", new_callable=AsyncMock):
+        mock_get_cache.return_value = None
+        result = await ask_custom(
+            "knowledge",
+            "Jaké produkty mají nejvyšší tržby?",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+        )
+
+    assert result.response_type == "answer"
+    assert result.answer.startswith("Produkty s nejvyššími tržbami jsou:")
+    assert "1. Produkt P0100: 2550.25" in result.answer
+    mock_query_cache.get_exact.assert_not_called()
+    mock_query_cache.get_semantic.assert_not_called()
+    mock_gen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ask_preset_routes_k001_to_deterministic_list_before_llm():
+    with patch("app.assistants.service.assistant_cache") as mock_cache, \
+         patch("app.assistants.service._generate", new_callable=AsyncMock) as mock_gen, \
+         patch("app.assistants.service._get_deterministic_intent_cache", new_callable=AsyncMock) as mock_get_cache, \
+         patch("app.assistants.service._set_deterministic_intent_cache", new_callable=AsyncMock):
+        mock_cache.set = AsyncMock()
+        mock_get_cache.return_value = None
+
+        result = await ask_preset(
+            "knowledge",
+            "k_001",
+            "cs",
+            forecasting_repo=FakeAnalyticalRepo(),
+        )
+
+    assert result.answer.startswith("Produkty s nejvyššími celkovými prodeji jsou:")
+    assert result.question_id == "k_001"
+    mock_cache.set.assert_called_once()
     mock_gen.assert_not_called()

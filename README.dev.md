@@ -646,16 +646,63 @@ python -m scripts.rag_reset_and_ingest
 
 ## 19. Recommended Next Steps
 
-1. Commit and review the Qdrant migration.
-2. Start local Docker stack and verify Qdrant health.
-3. Run bootstrap flow:
-   `train -> ingest-reports -> warm_preset_cache`
-4. Verify:
-   - forecast works
-   - preset cache works
-   - deterministic facts answers are stable
-   - traces are visible
-5. Push only after local smoke test.
+### Current local checkpoint
+
+Local branch includes these latest commits:
+- `3e8a31e` `Harden settings loading and Qdrant search compatibility`
+- `877143e` `Stabilize Qdrant cache for local smoke tests`
+- `7946df9` `Silence pytest asyncio fixture warning`
+- `d009bb9` `Route promo lift questions through deterministic facts`
+- `3251574` `Route average price questions through deterministic facts`
+- `b35c453` `Route sales date range queries deterministically`
+
+What is now implemented locally:
+- root `.env` loading is stable from repo root and tolerant to local shell/env noise
+- Qdrant semantic cache works with deterministic UUID point IDs
+- exact preset text typed manually in custom input is routed to the same preset answer path
+- deterministic routing exists for:
+  - top/bottom product by quantity
+  - top/bottom product by revenue
+  - top product by average selling price
+  - top product by promo lift
+  - sales data date range
+
+What was verified locally on Docker Desktop:
+- backend `http://localhost:8001` and frontend `http://localhost:4000`
+- Qdrant host port must be `6337` on this machine because host port `6333` is already occupied elsewhere
+- `pytest tests -q` passed: `182 passed`
+- `python -m compileall backend/app backend/tests` passed
+- repeated and paraphrased deterministic queries returned stable answers
+- date-range queries no longer go through semantic cache -> RAG -> LLM
+
+### After PC restart
+
+Use the same host port override before starting the stack:
+
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d
+curl.exe -fsS http://localhost:8001/api/health
+curl.exe -fsS http://localhost:6337/readyz
+```
+
+If backend was rebuilt before restart and you want to ensure the newest local code is running:
+
+```powershell
+$env:QDRANT_HOST_PORT='6337'
+docker compose up -d --build backend
+```
+
+### What to test next
+
+1. Manual UI testing in frontend on `http://localhost:4000`.
+2. Re-ask deterministic business questions multiple ways and confirm same answer every time.
+3. Inspect traces and confirm routes:
+   - `deterministic_facts`
+   - `deterministic_date_range`
+   - `preset_text_match` for exact preset text typed manually
+4. Keep collecting any exact business queries that still fall through to `default_assistant`.
+5. Do not push yet; continue only with local Docker/Desktop verification until behavior is stable.
 
 ## 20. Smoke Test Checklist
 
@@ -707,6 +754,8 @@ Expected outcomes:
 - open response trace
 - verify route:
   - `deterministic_facts` for exact supported business fact
+  - `deterministic_date_range` for sales data date-range questions
+  - `preset_text_match` when a manually typed query exactly matches localized preset text
   - `default_assistant` for normal RAG/analyst questions
 
 ## 21. Commit Discipline
